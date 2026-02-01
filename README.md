@@ -69,3 +69,16 @@ Alignment: The modernization agent is prompted to prioritize memory safety and p
 
 ⚖️ License
 This project is licensed under the MIT License - see the LICENSE file for details.
+
+# Agent-Green: COBOL-to-Rust Modernization
+A high-performance agent leveraging **Gemini 3 Pro (High Thinking)** to modernize legacy mainframe logic.
+
+## 🚀 Features
+- **High-Thinking Modernization**: Uses deep reasoning to ensure Rust safety and idiomatic patterns.
+- **Transparency Logs**: Automatically archives raw LLM reasoning to S3 (`eu-west-1`) for auditability.
+- **Base64 Cloaking**: Ingests source code via an opaque protocol to ensure unbiased translation.
+
+## 🛠️ Infrastructure
+- **Region**: `eu-west-1`
+- **State Store**: AWS S3
+- **Runtime**: Docker (Rust 1.75+)
