@@ -1,3 +1,4 @@
+![CI Status](https://github.com/venkatnagala/Mainframe-Modernization/actions/workflows/rust.yml/badge.svg)
 Mainframe-Modernization: Surgical AI Refactoring
 🚀 Overview
 Mainframe-Modernization is an AI-driven orchestration framework designed to refactor legacy IBM Mainframe logic (COBOL/JCL) into cloud-native Rust.
