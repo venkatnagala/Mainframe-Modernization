@@ -1,0 +1,38 @@
+services:
+  # 🟣 The AI Modernizer
+  purple-agent:
+    build:
+      context: ./purple_agent
+      dockerfile: Dockerfile
+    container_name: purple-agent
+    ports:
+      - "8081:8081"
+    env_file: .env
+    networks:
+      - modernization-network
+    restart: always
+
+  # 🟢 The Fidelity Referee
+  green-agent:
+    build:
+      context: ./green_agent
+      dockerfile: Dockerfile
+    container_name: green-agent
+    ports:
+      - "8080:8080"
+    env_file: .env
+    environment:
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_REGION=eu-west-1  # Add this line- AWS_REGION=${AWS_REGION}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - PURPLE_AGENT_URL=http://purple-agent:8081/solve
+    depends_on:
+      - purple-agent
+    networks:
+      - modernization-network
+    restart: always
+
+networks:
+  modernization-network:
+    driver: bridge  # <--- Added explicitly as requested
