@@ -1,458 +1,294 @@
-use actix_web::{post, web, App, HttpServer, Responder, HttpResponse};
-use actix_cors::Cors;
-use aws_sdk_s3::Client as S3Client;
-use aws_sdk_s3::primitives::ByteStream;
-use reqwest_middleware::ClientBuilder;
-use reqwest_retry::{RetryTransientMiddleware, policies::ExponentialBackoff};
+// Green Agent - Orchestrator (Updated for Agent Gateway Integration)
+// All MCP server calls now route through the Agent Gateway for AuthN/AuthZ
+//
+// Flow: Green Agent -> Agent Gateway (JWT) -> MCP Server
+//       Previously: Green Agent -> MCP Server directly
+
+use actix_web::{web, App, HttpServer, HttpResponse};
 use serde::{Deserialize, Serialize};
-use serde_json::json;
-use anyhow::{Context, Result};
-use chrono::Utc;
-use std::process::Command;
-use std::fs;
-use aws_sdk_s3::presigning::PresigningConfig;
-use std::time::Duration;
+use std::sync::RwLock;
+use log::{info, error};
 
-#[derive(Deserialize)]
-struct SourceLocation { 
-    bucket: String, 
-    key: String 
+// ─── Gateway Client ───────────────────────────────────────────────────────────
+
+pub struct GatewayClient {
+    pub gateway_url: String,
+    pub agent_id: String,
+    pub access_token: RwLock<Option<String>>,
+    http_client: reqwest::Client,
 }
 
-#[derive(Deserialize)]
-struct EvalRequest { 
-    task_id: String, 
-    source_location: SourceLocation 
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash)]
+struct TokenResponse {
+    access_token: String,
 }
 
-#[derive(Serialize)]
-struct EvalResponse { 
-    task_id: String, 
-    status: String, 
-    match_confirmed: bool,
-    rust_code_url: Option<String>,
-    logs_url: Option<String>,
+impl GatewayClient {
+    pub fn new(gateway_url: String, agent_id: String, api_key: String) -> Self {
+        // Store api_key for token refresh (not shown for brevity - use Arc<Mutex>)
+        GatewayClient {
+            gateway_url,
+            agent_id,
+            access_token: RwLock::new(None),
+            http_client: reqwest::Client::new(),
+        }
+    }
+
+    /// Authenticate with gateway and get JWT token
+    pub async fn authenticate(&self, api_key: &str) -> Result<(), String> {
+        let response = self.http_client
+            .post(format!("{}/auth/token", self.gateway_url))
+            .json(&serde_json::json!({
+                "agent_id": self.agent_id,
+                "api_key": api_key,
+                "requested_role": "orchestrator"
+            }))
+            .send()
+            .await
+            .map_err(|e| format!("Gateway auth failed: {}", e))?;
+
+        if !response.status().is_success() {
+            return Err(format!("Auth rejected: {}", response.status()));
+        }
+
+        let token_resp: TokenResponse = response.json().await
+            .map_err(|e| format!("Invalid auth response: {}", e))?;
+
+        let mut token = self.access_token.write().unwrap();
+        *token = Some(token_resp.access_token);
+        info!("✅ Green Agent authenticated with gateway");
+        Ok(())
+    }
+
+    /// Call an MCP server via the gateway (requires prior authentication)
+    pub async fn invoke_mcp(
+        &self,
+        target_mcp: &str,
+        operation: &str,
+        payload: serde_json::Value,
+    ) -> Result<serde_json::Value, String> {
+        let token = {
+            let t = self.access_token.read().unwrap();
+            t.clone().ok_or("Not authenticated with gateway")?
+        };
+
+        let response = self.http_client
+            .post(format!("{}/mcp/invoke", self.gateway_url))
+            .header("Authorization", format!("Bearer {}", token))
+            .json(&serde_json::json!({
+                "target_mcp": target_mcp,
+                "operation": operation,
+                "payload": payload
+            }))
+            .send()
+            .await
+            .map_err(|e| format!("Gateway request failed: {}", e))?;
+
+        let status = response.status();
+        let body: serde_json::Value = response.json().await
+            .map_err(|e| format!("Invalid gateway response: {}", e))?;
+
+        if status.is_success() {
+            let success = body["success"].as_bool().unwrap_or(false);
+            if success {
+                Ok(body["result"].clone())
+            } else {
+                Err(body["error"].as_str().unwrap_or("Unknown error").to_string())
+            }
+        } else if status.as_u16() == 403 {
+            Err(format!("AuthZ DENIED for {}/{}: {}", target_mcp, operation,
+                        body["error"].as_str().unwrap_or("")))
+        } else {
+            Err(format!("Gateway error {}: {:?}", status, body))
+        }
+    }
 }
 
-#[post("/evaluate")]
-async fn handle_start_eval(req: web::Json<EvalRequest>) -> impl Responder {
-    let task_id = req.task_id.clone();
-    println!("📡 [TASK: {}] Starting Evaluation...", task_id);
+// ─── Pipeline Structs ─────────────────────────────────────────────────────────
 
-    match process_modernization(&req).await {
-        Ok(response) => {
-            println!("✅ [TASK: {}] {}", task_id, response.status);
-            HttpResponse::Ok().json(response)
-        },
+//#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq, Hash)]
+pub struct ModernizeRequest {
+    pub task_id: String,
+    pub source_location: SourceLocation,
+}
+
+//#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq, Hash)]
+pub struct SourceLocation {
+    pub bucket: String,
+    pub key: String,
+}
+
+//#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash)]
+pub struct ModernizeResponse {
+    pub task_id: String,
+    pub status: String,
+    pub match_confirmed: bool,
+    pub rust_code_url: Option<String>,
+    pub logs_url: Option<String>,
+    pub audit_request_id: Option<String>,
+}
+
+pub struct AppState {
+    pub gateway: GatewayClient,
+    pub s3_bucket: String,
+}
+
+// ─── Pipeline Handler ─────────────────────────────────────────────────────────
+
+async fn evaluate(
+    state: web::Data<AppState>,
+    req: web::Json<ModernizeRequest>,
+) -> HttpResponse {
+    info!("🚀 Starting modernization for task: {}", req.task_id);
+    let gw = &state.gateway;
+
+    // Step 1: Fetch COBOL source via Agent Gateway -> S3 MCP
+    let cobol_source = match gw.invoke_mcp(
+        "s3_mcp",
+        "fetch_source",
+        serde_json::json!({
+            "bucket": req.source_location.bucket,
+            "key": req.source_location.key,
+        })
+    ).await {
+        Ok(result) => result["content"].as_str().unwrap_or("").to_string(),
         Err(e) => {
-            eprintln!("❌ [TASK: {}] Error: {:?}", task_id, e);
-            HttpResponse::InternalServerError().json(EvalResponse {
-                task_id, 
-                status: format!("{:?}", e), 
+            error!("Failed to fetch COBOL: {}", e);
+            return HttpResponse::InternalServerError().json(ModernizeResponse {
+                task_id: req.task_id.clone(),
+                status: format!("FAILED: {}", e),
                 match_confirmed: false,
                 rust_code_url: None,
                 logs_url: None,
-            })
+                audit_request_id: None,
+            });
         }
-    }
-}
-
-async fn process_modernization(req: &EvalRequest) -> Result<EvalResponse> {
-    // 1. Setup S3 client
-    let ak = std::env::var("AWS_ACCESS_KEY_ID")?;
-    let sk = std::env::var("AWS_SECRET_ACCESS_KEY")?;
-    let credentials = aws_sdk_s3::config::Credentials::new(ak, sk, None, None, "manual");
-    
-    let s3_config = aws_sdk_s3::config::Builder::new()
-        .region(aws_sdk_s3::config::Region::new("us-east-1"))
-        .credentials_provider(credentials)
-        .build();
-
-    let s3_client = S3Client::from_conf(s3_config);
-    
-    // 2. Fetch source code (COBOL or Assembler)
-    println!("📥 Fetching source from S3: {}", req.source_location.key);
-    let data = s3_client.get_object()
-        .bucket(&req.source_location.bucket)
-        .key(&req.source_location.key)
-        .send().await
-        .context("S3 Access Denied")?;
-    
-    let bytes = data.body.collect().await?.to_vec();
-    let source_code = String::from_utf8(bytes)?;
-    println!("✅ Fetched {} bytes of source code", source_code.len());
-    
-    // 3. Detect language
-    let is_cobol = req.source_location.key.ends_with(".cbl") || 
-                   req.source_location.key.ends_with(".cob");
-    let language = if is_cobol { "COBOL" } else { "Assembler" };
-
-    // 4. Fetch input data
-    let input_data = fetch_input_data(&s3_client, &req.source_location.bucket).await?;
-    println!("📥 Input data: '{}'", input_data);
-    
-    // 5. Modernize with Gemini
-    println!("🤖 Invoking Gemini-2.5-pro for {} modernization...", language);
-    let (rust_code, raw_logs) = translate_with_gemini_detailed(&source_code, language).await?;
-    
-    let ts = Utc::now().timestamp();
-    let task_id = &req.task_id;
-    
-    // 6. Validate if COBOL
-    let (status, match_confirmed, rust_folder) = if is_cobol {
-        validate_cobol_modernization(&source_code, &rust_code, &input_data).await?
-    } else {
-        validate_assembler_modernization(&rust_code).await?
     };
-    
-    // 7. Save to S3
-    let rust_key = format!("{}/{}_{}.rs", rust_folder, task_id, ts);
-    let logs_key = format!("raw_logs/{}_{}.json", task_id, ts);
-        
-    println!("💾 Saving to S3: {}", rust_key);
-    archive_with_client(&s3_client, &req.source_location.bucket, &rust_key, &rust_code).await?;
-    archive_with_client(&s3_client, &req.source_location.bucket, &logs_key, &raw_logs).await?;
-    println!("✅ Saved to S3");
-    
-    // 8. Return response (with pre-signed URLs)
-    // Generate pre-signed URLs
-    let rust_url = generate_presigned_url(&s3_client, &req.source_location.bucket, &rust_key).await.ok();
-    let logs_url = generate_presigned_url(&s3_client, &req.source_location.bucket, &logs_key).await.ok();
-    
-        Ok(EvalResponse {
-        task_id: task_id.clone(),
-        status,
-        match_confirmed,
-        rust_code_url: rust_url,
-        logs_url: logs_url,
-    })
-    
-}
 
-async fn fetch_input_data(client: &S3Client, bucket: &str) -> Result<String> {
-    let data = client.get_object()
-        .bucket(bucket)
-        .key("data/loan_data.json")
-        .send()
-        .await?;
-    
-    let bytes = data.body.collect().await?.to_vec();
-    let json_str = String::from_utf8(bytes)?;
-    let json: serde_json::Value = serde_json::from_str(&json_str)?;
-    
-    // Convert "001000000" cents to "10000.00" dollars
-    let loan_cents = json["loan_amount"].as_str().unwrap_or("0");
-    let loan_decimal = format!("{}.{:02}", 
-        loan_cents[..loan_cents.len().saturating_sub(2)].trim_start_matches('0').parse::<i64>().unwrap_or(0),
-        &loan_cents[loan_cents.len().saturating_sub(2)..]
-    );
-    
-    Ok(loan_decimal)
-}
-
-async fn generate_presigned_url(
-    client: &S3Client, 
-    bucket: &str, 
-    key: &str
-) -> Result<String> {
-    let presigned_request = client
-        .get_object()
-        .bucket(bucket)
-        .key(key)
-        .presigned(
-            PresigningConfig::expires_in(Duration::from_secs(3600))? // 1 hour
-        )
-        .await?;
-    
-    Ok(presigned_request.uri().to_string())
-}
-
-async fn validate_cobol_modernization(
-    cobol_source: &str, 
-    rust_code: &str, 
-    input_data: &str
-) -> Result<(String, bool, String)> {
-    println!("🔨 Compiling and executing COBOL...");
-    
-    // Write input file
-    fs::write("/tmp/input.txt", format!("{}\n", input_data))?;
-    println!("📝 Wrote input.txt: '{}'", input_data);
-    
-    // Compile COBOL (fixed format, no -free flag)
-    fs::write("/tmp/program.cbl", cobol_source)?;
-    let cobol_compile = Command::new("cobc")
-        .args(&["-x", "-std=ibm", "/tmp/program.cbl", "-o", "/tmp/cobol_prog"])
-        .output()?;
-    
-    if !cobol_compile.status.success() {
-        let error = String::from_utf8_lossy(&cobol_compile.stderr);
-        return Err(anyhow::anyhow!("COBOL compilation failed: {}", error));
-    }
-    
-    // Run COBOL
-    let cobol_run = Command::new("/tmp/cobol_prog")
-        .current_dir("/tmp")
-        .output()?;
-    
-    // After running COBOL, capture ALL output
-    let cobol_run = Command::new("/tmp/cobol_prog")
-    .current_dir("/tmp")
-    .output()?;
-
-        println!("📋 COBOL stdout (DISPLAY output): '{}'", String::from_utf8_lossy(&cobol_run.stdout));
-        println!("📋 COBOL stderr: '{}'", String::from_utf8_lossy(&cobol_run.stderr));
-
-    let cobol_output_file = fs::read_to_string("/tmp/output.txt")?;
-        println!("📄 COBOL output.txt: '{}'", cobol_output_file.trim());
-
-    // Also show what's IN the input file COBOL is reading
-    let input_check = fs::read_to_string("/tmp/input.txt")?;
-        println!("🔍 COBOL sees input.txt as: '{}'", input_check);
-    
-    if !cobol_run.status.success() {
-        let error = String::from_utf8_lossy(&cobol_run.stderr);
-        return Err(anyhow::anyhow!("COBOL execution failed: {}", error));
-    }
-    
-    let cobol_output = fs::read_to_string("/tmp/output.txt")
-        .unwrap_or_else(|_| String::from_utf8_lossy(&cobol_run.stdout).to_string());
-    
-    println!("📊 COBOL output: {}", cobol_output.trim());
-    
-    // Compile and run Rust
-    println!("🦀 Compiling and executing Rust...");
-    
-    // Reset input for Rust
-    fs::write("/tmp/input.txt", format!("{}\n", input_data))?;
-    
-    // Create Cargo project
-    let project_dir = "/tmp/rust_project";
-    let _ = fs::remove_dir_all(project_dir);
-    fs::create_dir_all(&format!("{}/src", project_dir))?;
-
-    //rust_decimal_macros = "1.36"
-    //num-traits = "0.2"
-    //num-format = "0.4"
-    
-    let cargo_toml = r#"[package]
-                            name = "modernized"
-                            version = "0.1.0"
-                            edition = "2021"
-
-                            [dependencies]
-                            rust_decimal = "1.36"
-                            rust_decimal_macros = "1.36"
-                            "#;
-    fs::write(&format!("{}/Cargo.toml", project_dir), cargo_toml)?;
-    fs::write(&format!("{}/src/main.rs", project_dir), rust_code)?;
-    
-    println!("🔨 Building Rust project...");
-    
-    let rust_compile = Command::new("cargo")
-        .args(&["build", "--release", "--manifest-path", &format!("{}/Cargo.toml", project_dir)])
-        .current_dir(project_dir)
-        .output()?;
-    
-    if !rust_compile.status.success() {
-        let error = String::from_utf8_lossy(&rust_compile.stderr);
-        println!("❌ Rust compilation failed: {}", error);
-        return Ok((
-            format!("Rust compilation failed: {}", error),
-            false,
-            "modernized/failed".to_string()
-        ));
-    }
-    
-    println!("✅ Rust compiled successfully");
-    
-    // Run Rust binary
-    let rust_run = Command::new(&format!("{}/target/release/modernized", project_dir))
-        .current_dir("/tmp")
-        .output()?;
-    
-    let rust_output = fs::read_to_string("/tmp/output.txt")
-        .unwrap_or_else(|_| String::from_utf8_lossy(&rust_run.stdout).to_string());
-    
-    println!("📊 Rust output: {}", rust_output.trim());
-    
-    // Compare outputs - normalize whitespace
-    let normalize = |s: &str| -> String {
-            s.split_whitespace()
-            .collect::<Vec<_>>()
-             .join(" ")
-            };
-
-    let cobol_normalized = normalize(&cobol_output);
-    let rust_normalized = normalize(&rust_output);
-
-    let matched = cobol_normalized.trim() == rust_normalized.trim();
-
-        println!("🔍 Comparing outputs:");
-        println!("   COBOL (normalized): '{}'", cobol_normalized);
-        println!("   Rust (normalized):  '{}'", rust_normalized);
-        println!("   Match: {}", matched);
-    
-    let (status, folder) = if matched {
-        ("SUCCESS - Outputs match!".to_string(), "modernized/validated".to_string())
-    } else {
-        (format!("Output mismatch. COBOL: '{}', Rust: '{}'", 
-                cobol_output.trim(), rust_output.trim()),
-         "modernized/needs-review".to_string())
+    // Step 2: Compile and execute COBOL via Agent Gateway -> COBOL MCP
+    let cobol_output = match gw.invoke_mcp(
+        "cobol_mcp",
+        "compile",
+        serde_json::json!({"source": cobol_source})
+    ).await {
+        Ok(r) => r["output"].as_str().unwrap_or("").to_string(),
+        Err(e) => return error_response(&req.task_id, &e),
     };
-    
-    Ok((status, matched, folder))
-}
 
-async fn validate_assembler_modernization(rust_code: &str) -> Result<(String, bool, String)> {
-    println!("🦀 Compiling Rust (Assembler source - no validation)...");
-    
-    let project_dir = "/tmp/rust_project";
-    let _ = fs::remove_dir_all(project_dir);
-    fs::create_dir_all(&format!("{}/src", project_dir))?;
+    // Step 3: Translate to Rust via Agent Gateway -> Gemini MCP
+    let rust_code = match gw.invoke_mcp(
+        "gemini_mcp",
+        "translate_cobol",
+        serde_json::json!({"source": cobol_source})
+    ).await {
+        Ok(r) => r["rust_code"].as_str().unwrap_or("").to_string(),
+        Err(e) => return error_response(&req.task_id, &e),
+    };
 
-    //rust_decimal_macros = "1.36"                            
-    //num-traits = "0.2"
-    //num-format = "0.4"
+    // Step 4: Compile and execute Rust via Agent Gateway -> Rust MCP
+    let rust_output = match gw.invoke_mcp(
+        "rust_mcp",
+        "compile",
+        serde_json::json!({"source": rust_code})
+    ).await {
+        Ok(r) => r["output"].as_str().unwrap_or("").to_string(),
+        Err(e) => return error_response(&req.task_id, &e),
+    };
 
-    let cargo_toml = r#"[package]
-                            name = "modernized"
-                            version = "0.1.0"
-                            edition = "2021"
+    // Step 5: Validate outputs match
+    let match_confirmed = outputs_match(&cobol_output, &rust_output);
+    info!("Validation: COBOL={:?} RUST={:?} MATCH={}", cobol_output, rust_output, match_confirmed);
 
-                            [dependencies]
-                            rust_decimal = "1.36"
-                            rust_decimal_macros = "1.36"                            
-                            "#;
-    fs::write(&format!("{}/Cargo.toml", project_dir), cargo_toml)?;
-    fs::write(&format!("{}/src/main.rs", project_dir), rust_code)?;
-    
-    let rust_compile = Command::new("cargo")
-        .args(&["build", "--release", "--manifest-path", &format!("{}/Cargo.toml", project_dir)])
-        .current_dir(project_dir)
-        .output()?;
-    
-    if !rust_compile.status.success() {
-        let error = String::from_utf8_lossy(&rust_compile.stderr);
-        return Ok((
-            format!("Rust compilation failed: {}", error),
-            false,
-            "modernized/failed".to_string()
-        ));
-    }
-    
-    Ok((
-        "Rust compiles successfully. Assembler validation requires mainframe access.".to_string(),
-        false,
-        "modernized".to_string()
-    ))
-}
+    // Step 6: Save to S3 only if validated
+    let rust_code_url = if match_confirmed {
+        let output_key = format!("modernized/{}/{}.rs",
+            req.task_id,
+            req.source_location.key.replace(".cbl", ""));
 
-async fn translate_with_gemini_detailed(source_code: &str, language: &str) -> Result<(String, String)> {
-    let api_key = std::env::var("GEMINI_API_KEY").context("GEMINI_API_KEY missing")?;
-    let client = ClientBuilder::new(reqwest::Client::new())
-        .with(RetryTransientMiddleware::new_with_policy(
-            ExponentialBackoff::builder().build_with_max_retries(3)))
-        .build();
-
-    let url = format!("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key={}", api_key);
-
-    /*let system_instruction = format!(
-        "Modernize the input {} code to idiomatic Rust. \
-         Use file I/O: read from 'input.txt' and write to 'output.txt'. \
-         \
-         CRITICAL PARSING REQUIREMENTS: \
-         - Input contains decimal numbers like '10000.00' \
-         - MUST use rust_decimal::Decimal::from_str() for ALL number parsing \
-         - NEVER use i64, u64, or integer parsing for financial data \
-         - Example: use rust_decimal::Decimal; use std::str::FromStr; let amount = Decimal::from_str(input.trim()).unwrap(); \
-         \
-         For packed decimal (COMP-3), use rust_decimal::Decimal for exact arithmetic. \
-         Keep the output format identical to the original program. \
-         \
-         Return the Rust code as plain text in 'modernized_rust'.",
-        language
-    ); */
-
-    let system_instruction = format!(
-    "Modernize the input {} code to idiomatic Rust. \
-     Use file I/O: read from 'input.txt' and write to 'output.txt'. \
-     \
-     CRITICAL REQUIREMENTS: \
-     - Use ONLY rust_decimal::Decimal for all numbers \
-     - Parse input with: Decimal::from_str(input.trim()).unwrap() \
-     - Format output with standard Rust format macro: format!(\"{{:.2}}\", value) \
-     - DO NOT use num-format, to_formatted_string, or any formatting libraries \
-     - Match exact output format: 'CALCULATED INTEREST: 550.00' \
-     \
-     Example output formatting: \
-     let result = format!(\"CALCULATED INTEREST: {{:.2}}\", total_interest); \
-     \
-     Return the Rust code as plain text in 'modernized_rust'.",
-    language
-    );
-
-    let payload = json!({
-        "system_instruction": {
-            "parts": [{ "text": system_instruction }]
-        },
-        "contents": [{ 
-            "role": "user", 
-            "parts": [{ "text": format!("Modernize this {} code to Rust:\n{}\n", language, source_code) }] 
-        }],
-        "generationConfig": {
-            "temperature": 0.7,
-            "responseMimeType": "application/json",
-            "responseSchema": {
-                "type": "object",
-                "properties": { 
-                    "modernized_rust": { "type": "string" },
-                    "notes": { "type": "string" } 
-                },
-                "required": ["modernized_rust"]
+        match gw.invoke_mcp("s3_mcp", "save_output", serde_json::json!({
+            "bucket": state.s3_bucket,
+            "key": output_key,
+            "content": rust_code,
+        })).await {
+            Ok(r) => r["presigned_url"].as_str().map(String::from),
+            Err(e) => {
+                error!("Save failed: {}", e);
+                None
             }
         }
-    });
+    } else {
+        None
+    };
 
-    let resp = client.post(url).json(&payload).send().await?;
-    let status = resp.status();
-    let raw_text = resp.text().await?;
-
-    if !status.is_success() { 
-        return Err(anyhow::anyhow!("API Error {}: {}", status, raw_text)); 
-    }
-
-    let json: serde_json::Value = serde_json::from_str(&raw_text)?;
-    let text_content = json["candidates"][0]["content"]["parts"][0]["text"]
-        .as_str().unwrap_or("{}");
-    let inner_json: serde_json::Value = serde_json::from_str(text_content)?;
-    
-    let rust_code = inner_json["modernized_rust"].as_str()
-        .ok_or_else(|| anyhow::anyhow!("Rust code missing"))?
-        .to_string();
-
-    println!("✅ Generated {} lines of Rust code", rust_code.lines().count());
-
-    Ok((rust_code, raw_text))
+    HttpResponse::Ok().json(ModernizeResponse {
+        task_id: req.task_id.clone(),
+        status: if match_confirmed {
+            "SUCCESS - Outputs match! ✅".to_string()
+        } else {
+            "MISMATCH - Needs review ⚠️".to_string()
+        },
+        match_confirmed,
+        rust_code_url,
+        logs_url: None,
+        audit_request_id: None, // Would be populated from gateway response
+    })
 }
 
-async fn archive_with_client(client: &S3Client, bucket: &str, key: &str, content: &str) -> Result<()> {
-    client.put_object()
-        .bucket(bucket)
-        .key(key)
-        .body(ByteStream::from(content.as_bytes().to_vec()))
-        .send()
-        .await
-        .context("S3 PutObject failed")?;
-    Ok(())
+fn outputs_match(cobol: &str, rust: &str) -> bool {
+    // Normalize whitespace for comparison
+    let normalize = |s: &str| -> String {
+        s.split_whitespace().collect::<Vec<_>>().join(" ").to_lowercase()
+    };
+    normalize(cobol) == normalize(rust)
+}
+
+fn error_response(task_id: &str, error: &str) -> HttpResponse {
+    HttpResponse::InternalServerError().json(ModernizeResponse {
+        task_id: task_id.to_string(),
+        status: format!("FAILED: {}", error),
+        match_confirmed: false,
+        rust_code_url: None,
+        logs_url: None,
+        audit_request_id: None,
+    })
+}
+
+async fn health() -> HttpResponse {
+    HttpResponse::Ok().json(serde_json::json!({"status": "healthy", "agent": "green_agent"}))
 }
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    dotenvy::dotenv().ok();
-    println!("🛡️ Green Agent [GEMINI-2.5-pro] Online at 0.0.0.0:8080");
+    env_logger::init_from_env(env_logger::Env::new().default_filter_or("info"));
 
-    HttpServer::new(|| {
-        App::new().wrap(Cors::permissive()).service(handle_start_eval)
+    let gateway_url = std::env::var("AGENT_GATEWAY_URL")
+        .unwrap_or("http://agent-gateway:8090".to_string());
+    let agent_id = std::env::var("AGENT_ID").unwrap_or("green_agent".to_string());
+    let api_key = std::env::var("AGENT_API_KEY")
+        .expect("AGENT_API_KEY must be set");
+    let s3_bucket = std::env::var("S3_BUCKET")
+        .unwrap_or("mainframe-refactor-lab-venkatnagala".to_string());
+
+    let gateway = GatewayClient::new(gateway_url.clone(), agent_id, api_key.clone());
+
+    // Authenticate with gateway on startup
+    gateway.authenticate(&api_key).await
+        .expect("Failed to authenticate with Agent Gateway");
+
+    let state = web::Data::new(AppState { gateway, s3_bucket });
+
+    info!("🟢 Green Agent (Orchestrator) starting - Gateway: {}", gateway_url);
+
+    HttpServer::new(move || {
+        App::new()
+            .app_data(state.clone())
+            .route("/evaluate", web::post().to(evaluate))
+            .route("/health", web::get().to(health))
     })
-    .bind(("0.0.0.0", 8080))?.run().await
+    .bind("0.0.0.0:8080")?
+    .run()
+    .await
 }

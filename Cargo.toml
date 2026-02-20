@@ -1,7 +1,8 @@
 [workspace]
-resolver = "2"
+resolver = "3"
 
 members = [
     "green_agent",
     "purple_agent",
+    "agent_gateway",
 ]
