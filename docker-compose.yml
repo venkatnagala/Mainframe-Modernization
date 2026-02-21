@@ -1,4 +1,25 @@
 services:
+  # 🔐 Agent Gateway - JWT AuthN + RBAC AuthZ
+  agent-gateway:
+    build:
+      context: ./agent_gateway
+      dockerfile: Dockerfile
+    container_name: agent-gateway
+    ports:
+      - "8090:8090"
+    env_file: .env
+    environment:
+      - BIND_ADDR=0.0.0.0:8090
+      - RUST_LOG=info
+      - JWT_SECRET=${JWT_SECRET:-dev-secret-change-in-production-minimum-32-chars}
+      - GREEN_AGENT_API_KEY=${AGENT_API_KEY:-green-agent-dev-key-change-in-prod}
+      - PURPLE_AGENT_API_KEY=purple-agent-dev-key-change-in-prod
+      - S3_MCP_URL=http://green-agent:8080
+      - GEMINI_MCP_URL=http://purple-agent:8081
+    networks:
+      - modernization-network
+    restart: always
+
   # 🟣 The AI Modernizer
   purple-agent:
     build:
@@ -8,6 +29,8 @@ services:
     ports:
       - "8081:8081"
     env_file: .env
+    depends_on:
+      - agent-gateway
     networks:
       - modernization-network
     restart: always
@@ -24,10 +47,14 @@ services:
     environment:
       - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-      - AWS_REGION=eu-west-1  # Add this line- AWS_REGION=${AWS_REGION}
+      - AWS_REGION=us-east-1
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - PURPLE_AGENT_URL=http://purple-agent:8081/solve
+      - AGENT_GATEWAY_URL=http://agent-gateway:8090
+      - AGENT_ID=green_agent
+      - AGENT_API_KEY=${AGENT_API_KEY:-green-agent-dev-key-change-in-prod}
     depends_on:
+      - agent-gateway
       - purple-agent
     networks:
       - modernization-network
@@ -35,4 +62,4 @@ services:
 
 networks:
   modernization-network:
-    driver: bridge  # <--- Added explicitly as requested
+    driver: bridge
