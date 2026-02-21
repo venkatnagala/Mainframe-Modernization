@@ -1,30 +1,84 @@
-![CI Status](https://github.com/venkatnagala/Mainframe-Modernization/actions/workflows/rust.yml/badge.svg)
 # Mainframe Modernization: AI-Powered COBOL to Rust Pipeline
 
+[![CI Status](https://github.com/venkatnagala/Mainframe-Modernization/actions/workflows/rust.yml/badge.svg)](https://github.com/venkatnagala/Mainframe-Modernization/actions/workflows/rust.yml)
 [![Rust](https://img.shields.io/badge/rust-%23000000.svg?style=for-the-badge&logo=rust&logoColor=white)](https://www.rust-lang.org/)
 [![Docker](https://img.shields.io/badge/docker-%230db7ed.svg?style=for-the-badge&logo=docker&logoColor=white)](https://www.docker.com/)
 [![AWS](https://img.shields.io/badge/AWS-%23FF9900.svg?style=for-the-badge&logo=amazon-aws&logoColor=white)](https://aws.amazon.com/)
+[![Kubernetes](https://img.shields.io/badge/kubernetes-%23326ce5.svg?style=for-the-badge&logo=kubernetes&logoColor=white)](https://kubernetes.io/)
 
-> An automated, AI-powered system that modernizes legacy mainframe COBOL applications to memory-safe Rust with automated validation.
+> An automated, AI-powered system that modernizes legacy mainframe COBOL applications to memory-safe Rust with automated validation, secured by a zero-trust Agent Gateway.
+
+---
+
+## 🏆 Competition History
+
+| Competition | Phase | Status |
+|---|---|---|
+| **AgentAheads Hackathon 2026** | Phase 1: AI-powered COBOL→Rust pipeline with Docker Compose | ✅ Completed |
+| **SOLO AI Competition 2026** | Phase 2: Agent Gateway (JWT AuthN/AuthZ) + Kubernetes | 🔄 In Progress |
+
+---
 
 ## 🎯 Problem Statement
 
 Enterprise mainframe applications written in COBOL face critical challenges:
+
 - **Aging workforce**: COBOL programmers retiring faster than new ones learning
 - **Maintenance costs**: Legacy systems expensive to maintain
 - **Technical debt**: Decades-old codebases difficult to modify
 - **AWS gap**: AWS Mainframe Modernization uses AI for COBOL→Java but **requires expensive vendors** (like MLogica) for Assembler modernization
 
+---
+
 ## 💡 Our Solution
 
 A complete **AI-powered modernization pipeline** that:
+
 1. ✅ Fetches legacy COBOL from AWS S3
 2. ✅ Modernizes to idiomatic Rust using **Gemini 2.5 Pro**
 3. ✅ **Validates correctness** by comparing outputs
 4. ✅ Saves verified code back to S3 with secure access
-5. ✅ **Extends to Assembler** (solving AWS's gap)
+5. ✅ **Secures all agent-to-MCP communication** via Agent Gateway (JWT + RBAC)
+6. ✅ **Orchestrates containers** via Kubernetes with zero-trust NetworkPolicy
+7. ✅ **Extends to Assembler** (solving AWS's gap)
+
+---
 
 ## 🏗️ Architecture
+
+### Phase 2: Zero-Trust Multi-Agent on Kubernetes (Current)
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        Kubernetes Cluster                                   │
+│                    (namespace: mainframe-modernization)                     │
+│                                                                             │
+│  ┌──────────────┐     JWT/HTTPS      ┌─────────────────────────────────┐   │
+│  │              │ ────────────────► │       Agent Gateway              │   │
+│  │ Green Agent  │                   │   (AuthN + AuthZ + Audit)        │   │
+│  │(Orchestrator)│ ◄──────────────── │   Port: 8090 | Replicas: 2      │   │
+│  │  Port: 8080  │    Proxy Result   └──────────┬──────────────────────┘   │
+│  │  Replicas: 1 │                              │ Authorized calls only      │
+│  └──────────────┘                              ▼                            │
+│                                 ┌─────────────────────────────────────┐   │
+│  ┌──────────────┐               │            MCP Servers              │   │
+│  │ Purple Agent │ ──JWT/HTTPS──►│  ┌──────┐ ┌────────┐ ┌─────┐ ┌──┐  │   │
+│  │(AI Modernizer│               │  │  S3  │ │ Gemini │ │COBOL│ │RS│  │   │
+│  │  Port: 8085  │               │  │:8081 │ │ :8082  │ │:8083│ │T │  │   │
+│  │  HPA: 1-5    │               └─────────────────────────────────────┘   │
+│  └──────────────┘                                                           │
+│   NetworkPolicy: Default DENY ALL — whitelist only                          │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                      │
+                               ┌──────┴──────┐
+                               │   AWS S3    │
+                               │  programs/  │
+                               │  data/      │
+                               │  modernized/│
+                               └─────────────┘
+```
+
+### Phase 1: Docker Compose Pipeline (AgentAheads Hackathon)
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -35,28 +89,74 @@ A complete **AI-powered modernization pipeline** that:
 │  └──────────────┘  └──────────────┘  └─────────────────┘  │
 └─────────────────────────────────────────────────────────────┘
                             ▲ │
-                            │ │
-                    ┌───────┘ └───────┐
-                    │                 │
-        ┌───────────▼─────────────────▼──────────┐
-        │      Green Agent (Orchestrator)        │
-        │  • Fetches COBOL source from S3        │
-        │  • Compiles & executes COBOL (GnuCOBOL)│
-        │  • Compiles & executes Rust (Cargo)    │
-        │  • Validates outputs match             │
-        │  • Generates pre-signed S3 URLs        │
-        └────────────────┬───────────────────────┘
-                         │
-                         │ API Call
-                         │
-        ┌────────────────▼───────────────────────┐
-        │    Purple Agent (AI Modernizer)        │
-        │  • Powered by Gemini 2.5 Pro          │
-        │  • Converts COBOL → Idiomatic Rust    │
-        │  • Handles packed decimals (COMP-3)   │
-        │  • Generates memory-safe code         │
-        └────────────────────────────────────────┘
+        ┌───────────────────┘ └───────────────────┐
+        │                                         │
+        ▼                                         │
+┌───────────────────────────────────┐             │
+│   Green Agent (Orchestrator)      │             │
+│  • Fetches COBOL source from S3   │             │
+│  • Compiles & executes COBOL      │             │
+│  • Compiles & executes Rust       │             │
+│  • Validates outputs match        │             │
+│  • Generates pre-signed S3 URLs   │             │
+└────────────────┬──────────────────┘             │
+                 │ API Call                        │
+                 ▼                                 │
+┌───────────────────────────────────┐             │
+│   Purple Agent (AI Modernizer)    │             │
+│  • Powered by Gemini 2.5 Pro     │             │
+│  • Converts COBOL → Rust         │             │
+│  • Handles packed decimals        │             │
+└───────────────────────────────────┘             │
 ```
+
+---
+
+## 🔐 Agent Gateway: Zero-Trust Security (Phase 2)
+
+The Agent Gateway is the **security spine** of the pipeline. No agent communicates directly with MCP servers — every call is authenticated (JWT) and authorized (RBAC) at the gateway.
+
+### Authentication Flow
+
+```
+Agent                Agent Gateway              MCP Server
+  │                       │                         │
+  │── POST /auth/token ──►│                         │
+  │   {agent_id, api_key} │                         │
+  │                       │ Validates API key        │
+  │◄── JWT token ─────────│                         │
+  │                       │                         │
+  │── POST /mcp/invoke ──►│                         │
+  │   Bearer: JWT         │ Validates JWT            │
+  │   {target, operation} │ Checks RBAC              │
+  │                       │── Forward if allowed ──►│
+  │                       │◄── MCP result ──────────│
+  │◄── Proxied result ────│                         │
+  │                       │ Audit log entry          │
+```
+
+### Role-Based Access Control (RBAC)
+
+| Agent Role | S3 MCP | Gemini MCP | COBOL MCP | Rust MCP |
+|---|---|---|---|---|
+| **Orchestrator** (Green Agent) | ✅ All ops | ✅ All ops | ✅ All ops | ✅ All ops |
+| **Modernizer** (Purple Agent) | ❌ Blocked | ✅ Translate only | ❌ Blocked | ❌ Blocked |
+| **ReadOnly** (Audit) | List only | ❌ | ❌ | ❌ |
+
+> **AI Safety by Design**: Purple Agent is explicitly blocked from S3 write access even if compromised — blast radius is limited to translation operations only.
+
+### Tested & Verified
+
+```
+✅ Health check:       GET  /health          → {status: healthy, mcps: 4}
+✅ JWT issuance:       POST /auth/token      → Bearer token, role: orchestrator
+✅ Authorized call:    POST /mcp/invoke      → authorized: true (Green → S3)
+✅ Unauthorized call:  POST /mcp/invoke      → authorized: false (Purple → S3)
+   "Role Modernizer is not authorized to call fetch_source on s3_mcp"
+✅ Audit trail:        Every call logged with request_id and timestamp
+```
+
+---
 
 ## ✨ Key Features
 
@@ -72,199 +172,183 @@ A complete **AI-powered modernization pipeline** that:
 - Only saves Rust code when outputs match ✓
 
 ### 🔒 Security & Best Practices
+- **Agent Gateway**: JWT authentication + RBAC for all MCP server access
+- **Zero-trust NetworkPolicy**: Default DENY ALL in Kubernetes
 - **Least-privilege IAM** policies (read-only source, write-only outputs)
 - **Pre-signed URLs** for time-limited, secure file access (1-hour expiry)
-- **No secrets in code** - environment variables only
-- Docker containerization for consistent deployment
+- **No secrets in code** — environment variables + Kubernetes Secrets
 
 ### 🚀 Production Ready
-- Full Docker Compose setup
+- Kubernetes deployment with Helm chart
+- HPA auto-scales Purple Agent (1→5 replicas) based on CPU
+- Agent Gateway: 2 replicas, zero-downtime rolling updates
+- Full Docker Compose setup for local development
 - Automated test scripts
-- S3 integration for enterprise storage
-- Extensible architecture (ready for Assembler support)
+
+---
 
 ## 🎥 Demo
 
 ### Success Case: Interest Calculation
-```bash
+
+```
 Input:  Loan Amount: $10,000.00, Rate: 5.5%
 COBOL:  "CALCULATED INTEREST:     550.00"
 Rust:   "CALCULATED INTEREST: 550.00"
 Result: ✅ MATCH CONFIRMED - Code saved to S3
 ```
 
+---
+
 ## 🛠️ Tech Stack
 
 | Component | Technology | Purpose |
-|-----------|-----------|---------|
+|---|---|---|
 | **AI Model** | Gemini 2.5 Pro | COBOL→Rust translation |
+| **Agent Gateway** | Rust + Actix-web | JWT AuthN + RBAC AuthZ |
 | **Backend** | Rust + Actix-web | Green Agent orchestration |
 | **COBOL Compiler** | GnuCOBOL | Validate original code |
 | **Storage** | AWS S3 | Source & output storage |
-| **Security** | AWS IAM + Pre-signed URLs | Access control |
-| **Deployment** | Docker + Docker Compose | Containerization |
+| **Security** | JWT + AWS IAM + Pre-signed URLs | Access control |
+| **Orchestration** | Kubernetes + Helm | Container orchestration |
+| **Deployment** | Docker + Docker Compose | Local development |
 | **Languages** | Rust, COBOL, PowerShell | Implementation |
+
+---
 
 ## 📋 Prerequisites
 
-- **Docker Desktop** (with Docker Compose)
+- **Docker Desktop** (with Docker Compose) for local dev
+- **Kubernetes cluster** (Docker Desktop K8s / EKS) for Phase 2
+- **Helm 3.x** for Kubernetes deployment
 - **AWS Account** with S3 access
 - **Gemini API Key** (get from [Google AI Studio](https://aistudio.google.com/app/apikey))
 - **Git** (for cloning the repository)
 
+---
+
 ## 🚀 Quick Start
 
-### 1. Clone Repository
+### Option A: Local Development (Docker Compose)
+
+#### 1. Clone Repository
 ```bash
 git clone https://github.com/venkatnagala/Mainframe-Modernization.git
 cd Mainframe-Modernization
 ```
 
-### 2. Configure Environment
+#### 2. Configure Environment
 Create `.env` file in project root:
 ```bash
-# AWS Credentials
 AWS_ACCESS_KEY_ID=your_access_key
 AWS_SECRET_ACCESS_KEY=your_secret_key
 AWS_REGION=us-east-1
-
-# Gemini API Key
 GEMINI_API_KEY=your_gemini_api_key
 ```
 
-### 3. Setup AWS S3 Bucket
-Create S3 bucket with this structure:
-```
-mainframe-refactor-lab-venkatnagala/
-├── programs/          # Upload COBOL source files here
-│   └── interest_calc.cbl
-├── data/             # Upload test data here
-│   └── loan_data.json
-├── modernized/       # Auto-generated Rust outputs
-└── raw_logs/         # Auto-generated execution logs
-```
-
-**IAM Policy** (attach to your AWS user):
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Sid": "AllowListBucket",
-      "Effect": "Allow",
-      "Action": "s3:ListBucket",
-      "Resource": "arn:aws:s3:::mainframe-refactor-lab-venkatnagala"
-    },
-    {
-      "Sid": "AllowReadSource",
-      "Effect": "Allow",
-      "Action": "s3:GetObject",
-      "Resource": [
-        "arn:aws:s3:::mainframe-refactor-lab-venkatnagala/programs/*",
-        "arn:aws:s3:::mainframe-refactor-lab-venkatnagala/data/*"
-      ]
-    },
-    {
-      "Sid": "AllowWriteOutputs",
-      "Effect": "Allow",
-      "Action": ["s3:PutObject", "s3:GetObject"],
-      "Resource": [
-        "arn:aws:s3:::mainframe-refactor-lab-venkatnagala/modernized/*",
-        "arn:aws:s3:::mainframe-refactor-lab-venkatnagala/raw_logs/*"
-      ]
-    }
-  ]
-}
-```
-
-### 4. Build and Run
-```bash
-# Build containers
+#### 3. Build and Run
+```powershell
 docker-compose build
-
-# Start services
 docker-compose up
 ```
 
-The Green Agent will be available at `http://localhost:8080`
-
-### 5. Test the Pipeline
+#### 4. Test the Pipeline
 ```powershell
-# PowerShell
 $json = '{"task_id":"TEST_01","source_location":{"bucket":"mainframe-refactor-lab-venkatnagala","key":"programs/interest_calc.cbl"}}'
 Invoke-RestMethod -Uri http://localhost:8080/evaluate -Method POST -ContentType "application/json" -Body $json
 ```
 
-**Expected Response:**
-```json
-{
-  "task_id": "TEST_01",
-  "status": "SUCCESS - Outputs match!",
-  "match_confirmed": true,
-  "rust_code_url": "https://s3.amazonaws.com/...?X-Amz-Signature=...",
-  "logs_url": "https://s3.amazonaws.com/...?X-Amz-Signature=..."
-}
+---
+
+### Option B: Kubernetes Deployment (Phase 2)
+
+#### 1. Set environment variables
+```powershell
+$env:GEMINI_API_KEY = "your-gemini-key"
+$env:AWS_ACCESS_KEY_ID = "your-aws-key"
+$env:AWS_SECRET_ACCESS_KEY = "your-aws-secret"
 ```
+
+#### 2. Deploy with one command
+```powershell
+.\deploy.ps1 -Environment local
+```
+
+#### 3. Test Agent Gateway
+```powershell
+# Get JWT token
+$token = (Invoke-RestMethod -Uri http://localhost:8090/auth/token -Method POST `
+  -ContentType "application/json" `
+  -Body '{"agent_id":"green_agent","api_key":"your-key","requested_role":"orchestrator"}'
+).access_token
+
+# Health check
+Invoke-RestMethod -Uri http://localhost:8090/health -Method GET
+
+# Invoke MCP via gateway
+Invoke-RestMethod -Uri http://localhost:8090/mcp/invoke -Method POST `
+  -Headers @{Authorization="Bearer $token"} `
+  -ContentType "application/json" `
+  -Body '{"target_mcp":"s3_mcp","operation":"fetch_source","payload":{"bucket":"mainframe-refactor-lab-venkatnagala","key":"programs/interest_calc.cbl"}}'
+```
+
+---
 
 ## 📁 Project Structure
 
 ```
 Mainframe-Modernization/
+├── agent_gateway/            # 🆕 Phase 2: Zero-trust security gateway
+│   ├── src/main.rs          # JWT auth, RBAC, audit trail
+│   ├── Cargo.toml
+│   └── Dockerfile
 ├── green_agent/              # Orchestration service
-│   ├── src/
-│   │   └── main.rs          # Main orchestrator logic
+│   ├── src/main.rs          # Updated: routes calls via Agent Gateway
 │   ├── Dockerfile
 │   └── Cargo.toml
-├── purple_agent/            # AI modernization service (placeholder)
+├── purple_agent/             # AI modernization service
 │   └── ...
-├── legacy_source/           # Sample COBOL programs
+├── k8s/base/                 # 🆕 Phase 2: Kubernetes manifests
+│   ├── 00-namespace-rbac.yaml
+│   ├── 01-secrets-config.yaml
+│   ├── 02-agent-gateway.yaml
+│   ├── 03-agents.yaml
+│   └── 04-network-policy.yaml
+├── helm/                     # 🆕 Phase 2: Helm chart
+│   └── mainframe-modernization/
+│       └── values.yaml
+├── legacy_source/            # Sample COBOL programs
 │   └── interest_calc.cbl
-├── data/                    # Test data
+├── data/                     # Test data
 │   └── loan_data.json
-├── docker-compose.yml       # Multi-container orchestration
-├── .gitignore
+├── docker-compose.yml        # Local development
+├── deploy.ps1                # 🆕 Phase 2: One-command K8s deploy
 └── README.md
 ```
 
-## 🧪 Testing
-
-### Run Demo Script
-```powershell
-.\demo.ps1
-```
-
-### Manual Testing
-1. **Upload COBOL** to `s3://your-bucket/programs/`
-2. **Upload test data** to `s3://your-bucket/data/`
-3. **Send API request** to `http://localhost:8080/evaluate`
-4. **Download results** via pre-signed URLs
+---
 
 ## 📊 Validation Process
 
 ```
 ┌─────────────────────────────────────────┐
 │  1. Compile COBOL with GnuCOBOL         │
-│     └─> Create executable               │
 └───────────────┬─────────────────────────┘
                 │
 ┌───────────────▼─────────────────────────┐
 │  2. Execute COBOL with test data        │
-│     └─> Capture output                  │
 └───────────────┬─────────────────────────┘
                 │
 ┌───────────────▼─────────────────────────┐
-│  3. Generate Rust code (Gemini)         │
-│     └─> AI translates COBOL→Rust        │
+│  3. Generate Rust code (Gemini 2.5 Pro) │
 └───────────────┬─────────────────────────┘
                 │
 ┌───────────────▼─────────────────────────┐
 │  4. Compile Rust with Cargo             │
-│     └─> Build with dependencies         │
 └───────────────┬─────────────────────────┘
                 │
 ┌───────────────▼─────────────────────────┐
 │  5. Execute Rust with same test data    │
-│     └─> Capture output                  │
 └───────────────┬─────────────────────────┘
                 │
 ┌───────────────▼─────────────────────────┐
@@ -274,67 +358,67 @@ Mainframe-Modernization/
 └─────────────────────────────────────────┘
 ```
 
-## 🎓 Lessons Learned
-
-### Technical Challenges Overcome:
-1. **GnuCOBOL Quirks**: Implied decimal (`V`) handling issues
-   - Solution: Used `FUNCTION NUMVAL` and simple `MULTIPLY ... GIVING`
-   
-2. **Packed Decimal (COMP-3)**: Precision and calculation errors
-   - Solution: Decimal literals and explicit arithmetic order
-
-3. **Gemini Model Selection**: Original `gemini-3-pro-preview` didn't exist
-   - Solution: Used `gemini-2.5-pro` (correct model name)
-
-4. **Base64 Encoding Issues**: Unnecessary complexity in data transfer
-   - Solution: Switched to plain text JSON responses
-
-5. **Secret Management**: Nearly committed AWS credentials to Git
-   - Solution: Proper `.gitignore`, environment variables, rotated secrets
-
-### Key Insights:
-- 📚 **100+ S3 uploads** to debug COBOL compilation issues
-- ⏰ **48+ hours** spent debugging model configurations
-- 🎯 **Compiler messages**: Rust's helpful errors vs Assembler's cryptic codes
-- 🔒 **Security first**: Pre-signed URLs, least-privilege IAM, no secrets in code
+---
 
 ## 🏆 Competitive Advantages
 
-### vs AWS Mainframe Modernization:
+### vs AWS Mainframe Modernization
+
 | Feature | AWS Solution | Our Solution |
-|---------|-------------|--------------|
+|---|---|---|
 | **COBOL Modernization** | ✅ AI-powered (to Java) | ✅ AI-powered (to Rust) |
 | **Assembler Support** | ❌ Requires vendors (MLogica) | ✅ Architecture supports it |
 | **Validation** | ⚠️ Manual testing | ✅ Automated output comparison |
 | **Target Language** | Java | **Memory-safe Rust** |
+| **Agent Security** | ❌ No agent AuthZ | ✅ JWT + RBAC Agent Gateway |
 | **Cost** | Vendor fees | Open-source tools |
+
+---
+
+## 🎓 Lessons Learned
+
+### Technical Challenges Overcome
+
+1. **GnuCOBOL Quirks**: Implied decimal (`V`) handling → Used `FUNCTION NUMVAL`
+2. **Packed Decimal (COMP-3)**: Precision errors → Decimal literals and explicit arithmetic
+3. **Gemini Model Selection**: Wrong model name → Used `gemini-2.5-pro`
+4. **Base64 Encoding**: Unnecessary complexity → Switched to plain text JSON
+5. **Secret Management**: Nearly committed AWS credentials → Proper `.gitignore`, rotated secrets
+6. **Rust Workspace**: `agent_gateway` not in workspace members → Added to root `Cargo.toml`
+7. **RwLock Clone**: `GatewayClient` derived `Clone` on non-cloneable field → Removed derive
+
+### Key Insights
+- 📚 **100+ S3 uploads** to debug COBOL compilation issues
+- ⏰ **48+ hours** debugging model configurations
+- 🎯 **Rust compiler messages** are invaluable vs Assembler's cryptic codes
+- 🔒 **Security first**: Agent Gateway enforces zero-trust between all agents
+
+---
 
 ## 🔮 Future Enhancements
 
-### Phase 1: Assembler Support ⏳
-- Extend pipeline to handle IBM mainframe Assembler (HLASM/BAL)
-- Prove capability AWS doesn't offer without vendors
-
-### Phase 2: Solo.ai Competition 🎯
-- Integrate **KAgent/Agent Gateway** for security
-- Add authentication & authorization for MCP servers
-- Deploy to Kubernetes with Helm
-
 ### Phase 3: Production Features
-- Batch processing (multiple files)
+- Batch processing (multiple COBOL files)
 - Migration reports & analytics
 - Support for CICS, DB2, IMS
 - Performance comparison dashboards
+- MCP Tasks for long-running async translation jobs
+
+---
 
 ## 👥 Contributors
 
 **Venkat Nagala**
 - GitHub: [@venkatnagala](https://github.com/venkatnagala)
-- LinkedIn: [Venkat Nagala](https://www.linkedin.com/in/venkatnagala/)
+- LinkedIn: [Venkat Nagala](https://www.linkedin.com/in/tenalirama)
+
+---
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+MIT License — see [LICENSE](LICENSE) file for details.
+
+---
 
 ## 🙏 Acknowledgments
 
@@ -342,17 +426,9 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - **GnuCOBOL** for open-source COBOL compilation
 - **Anthropic Claude** for development assistance
 - **AWS** for cloud infrastructure
-- **AgentAheads Hackathon** for the inspiration
-
-## 📞 Support
-
-For questions or issues:
-1. Open a [GitHub Issue](https://github.com/venkatnagala/Mainframe-Modernization/issues)
-2. Check existing documentation
-3. Review demo scripts for examples
+- **AgentAheads Hackathon** for the Phase 1 inspiration
+- **Solo.io** for the SOLO AI Competition platform
 
 ---
 
-**Built with ❤️ for the AgentAheads Hackathon**
-
-*Modernizing mainframes, one line of COBOL at a time* 🚀
+*Built with ❤️ — Modernizing mainframes, one line of COBOL at a time* 🚀
