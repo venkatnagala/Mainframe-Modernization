@@ -27,9 +27,10 @@ WORKDIR /app
 COPY --from=builder /app/target/release/rust-mcp .
 
 # Pre-warm cargo registry cache
-RUN mkdir -p /tmp/cargo_home
 
-RUN useradd -r -s /bin/false mcpuser
+RUN useradd -r -m -s /bin/false mcpuser
+RUN mkdir -p /home/mcpuser/.cargo && chown -R mcpuser /home/mcpuser/.cargo
+
 USER mcpuser
 
 EXPOSE 8084

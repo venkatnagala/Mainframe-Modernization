@@ -59,17 +59,36 @@ async fn compile(
         return error_response(&format!("Failed to create work dir: {}", e));
     }
 
-    // Write Cargo.toml
-    let cargo_toml = format!(
-        r#"[package]
+// Detect dependencies from source code
+    let mut deps = String::from("");
+    if body.source.contains("rust_decimal") {
+        deps.push_str("rust_decimal = \"1.34\"\n");
+        deps.push_str("rust_decimal_macros = \"1.34\"\n");
+    }
+    if body.source.contains("num_format") {
+        deps.push_str("num-format = { version = \"0.4\", features = [\"with-system-locale\"] }\n");
+    }
+    if body.source.contains("num_traits") || body.source.contains("num-traits") {
+        deps.push_str("num-traits = \"0.2\"\n");
+    }
+    if body.source.contains("chrono") {
+        deps.push_str("chrono = \"0.4\"\n");
+    }
+    if body.source.contains("regex") {
+        deps.push_str("regex = \"1\"\n");
+    }
+
+let cargo_toml = format!(
+    r#"[package]
 name = "modernized"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-"#
-    );
-
+{}
+"#,
+    deps
+);
     if let Err(e) = fs::write(format!("{}/Cargo.toml", work_dir), &cargo_toml) {
         cleanup(&work_dir);
         return error_response(&format!("Failed to write Cargo.toml: {}", e));
@@ -85,7 +104,7 @@ edition = "2021"
     let build_output = Command::new("cargo")
         .args(["build", "--release"])
         .current_dir(&work_dir)
-        .env("CARGO_HOME", "/tmp/cargo_home")  // Shared cargo cache
+        .env("CARGO_HOME", "/home/mcpuser/.cargo")  // Shared cargo cache
         .output();
 
     match build_output {
@@ -183,7 +202,7 @@ async fn cargo_check(
     let result = Command::new("cargo")
         .args(["check"])
         .current_dir(&work_dir)
-        .env("CARGO_HOME", "/tmp/cargo_home")
+        .env("CARGO_HOME", "/home/mcpuser/.cargo")
         .output();
 
     cleanup(&work_dir);
@@ -226,7 +245,7 @@ async fn clippy(
     let result = Command::new("cargo")
         .args(["clippy", "--", "-D", "warnings"])
         .current_dir(&work_dir)
-        .env("CARGO_HOME", "/tmp/cargo_home")
+        .env("CARGO_HOME", "/home/mcpuser/.cargo")
         .output();
 
     cleanup(&work_dir);

@@ -78,7 +78,7 @@ struct GeminiCandidate {
 
 #[derive(Deserialize)]
 struct GeminiResponseContent {
-    parts: Vec<GeminiResponsePart>,
+    parts: Option<Vec<GeminiResponsePart>>,
 }
 
 #[derive(Deserialize)]
@@ -251,7 +251,7 @@ async fn call_gemini(state: &AppState, prompt: &str) -> Result<String, String> {
         }],
         generation_config: GeminiConfig {
             temperature: 0.1,   // Low temperature for deterministic code generation
-            max_output_tokens: 8192,
+            max_output_tokens: 32768,
         },
     };
 
@@ -277,9 +277,10 @@ async fn call_gemini(state: &AppState, prompt: &str) -> Result<String, String> {
     gemini_response.candidates
         .into_iter()
         .next()
-        .and_then(|c| c.content.parts.into_iter().next())
+        .and_then(|c| c.content.parts)
+        .and_then(|parts| parts.into_iter().next())
         .map(|p| p.text)
-        .ok_or("Empty response from Gemini".to_string())
+        .ok_or("Empty response from Gemini - possible safety filter or rate limit".to_string())
 }
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
