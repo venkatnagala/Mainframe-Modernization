@@ -1,42 +1,40 @@
-# Multi-stage build for minimal image size
 FROM rust:1.91-slim-bookworm AS builder
 
 WORKDIR /app
 
-# Add pkg-config and openssl dev libraries
 RUN apt-get update && apt-get install -y \
     pkg-config \
     libssl-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Cache dependencies
-COPY Cargo.toml Cargo.lock* ./
+COPY Cargo.toml ./
 RUN mkdir src && echo "fn main() {}" > src/main.rs
 RUN cargo build --release && rm -rf src
 
-# Build actual binary
 COPY src ./src
 RUN touch src/main.rs && cargo build --release
 
-# Runtime stage - minimal image
-FROM debian:bookworm-slim
+# Runtime stage - keep full Rust toolchain for compiling user code
+FROM rust:1.88-slim-bookworm
 
 RUN apt-get update && apt-get install -y \
     ca-certificates \
-    libssl3 \
+    libssl-dev \
+    pkg-config \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
+COPY --from=builder /app/target/release/rust-mcp .
 
-COPY --from=builder /app/target/release/agent-gateway .
+# Pre-warm cargo registry cache
+RUN mkdir -p /tmp/cargo_home
 
-# Non-root user for security
-RUN useradd -r -s /bin/false gateway
-USER gateway
+RUN useradd -r -s /bin/false mcpuser
+USER mcpuser
 
-EXPOSE 8090
+EXPOSE 8084
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD wget -qO- http://localhost:8090/health || exit 1
+    CMD wget -qO- http://localhost:8084/health || exit 1
 
-CMD ["./agent-gateway"]
+CMD ["./rust-mcp"]
