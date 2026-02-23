@@ -110,9 +110,10 @@ Requirements:
 2. Use idiomatic Rust (proper error handling, ownership, borrowing)
 3. Handle COBOL packed decimals (COMP-3) correctly using Rust decimal arithmetic
 4. Match numeric formatting exactly (same decimal places, spacing)
-5. Return ONLY the complete Rust source code, no explanations
-6. The Rust code must compile with standard cargo build
-7. Include necessary use statements and a main() function
+5. Always add `use rust_decimal::prelude::*;` at the top of the file when using rust_decimal
+6. Return ONLY the complete Rust source code, no explanations
+7. The Rust code must compile with standard cargo build
+8. Include necessary use statements and a main() function
 
 COBOL Source:
 {}
@@ -172,7 +173,8 @@ Requirements:
 1. Produce IDENTICAL output to the Assembler program
 2. Use idiomatic Rust with proper error handling
 3. Handle register operations and memory layout correctly
-4. Return ONLY the complete Rust source code
+4. Always add `use rust_decimal::prelude::*;` at the top when using rust_decimal
+5. Return ONLY the complete Rust source code
 
 Assembler Source:
 {}
