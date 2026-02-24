@@ -13,7 +13,7 @@ use log::{info, error};
 
 pub struct GatewayClient {
     pub gateway_url: String,
-    pub agent_id: String,
+    pub agent_id: String,    
     pub access_token: RwLock<Option<String>>,
     http_client: reqwest::Client,
 }
@@ -24,7 +24,7 @@ struct TokenResponse {
 }
 
 impl GatewayClient {
-    pub fn new(gateway_url: String, agent_id: String, api_key: String) -> Self {
+    pub fn new(gateway_url: String, agent_id: String, _api_key: String) -> Self {
         // Store api_key for token refresh (not shown for brevity - use Arc<Mutex>)
         GatewayClient {
             gateway_url,
@@ -127,7 +127,7 @@ pub struct ModernizeResponse {
     pub status: String,
     pub match_confirmed: bool,
     pub rust_code_url: Option<String>,
-    pub logs_url: Option<String>,
+    //pub logs_url: Option<String>,
     pub audit_request_id: Option<String>,
 }
 
@@ -162,7 +162,7 @@ async fn evaluate(
                 status: format!("FAILED: {}", e),
                 match_confirmed: false,
                 rust_code_url: None,
-                logs_url: None,
+                //logs_url: None,
                 audit_request_id: None,
             });
         }
@@ -232,7 +232,7 @@ async fn evaluate(
         },
         match_confirmed,
         rust_code_url,
-        logs_url: None,
+        //logs_url: None,
         audit_request_id: None, // Would be populated from gateway response
     })
 }
@@ -251,7 +251,7 @@ fn error_response(task_id: &str, error: &str) -> HttpResponse {
         status: format!("FAILED: {}", error),
         match_confirmed: false,
         rust_code_url: None,
-        logs_url: None,
+        //logs_url: None,
         audit_request_id: None,
     })
 }

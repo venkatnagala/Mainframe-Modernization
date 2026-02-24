@@ -53,8 +53,8 @@ services:
     ports:
       - "8087:8082"
     env_file: .env
-    environment:
-      - GEMINI_API_KEY=${GEMINI_API_KEY}
+    environment:      
+      - CLAUDE_API_KEY=${CLAUDE_API_KEY}
       - BIND_ADDR=0.0.0.0:8082
       - RUST_LOG=info
     depends_on:
@@ -125,8 +125,7 @@ services:
     environment:
       - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-      - AWS_REGION=us-east-1
-      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - AWS_REGION=us-east-1            
       - PURPLE_AGENT_URL=http://purple-agent:8081/solve
       - AGENT_GATEWAY_URL=http://agent-gateway:8090
       - AGENT_ID=green_agent

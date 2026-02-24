@@ -35,7 +35,7 @@ Enterprise mainframe applications written in COBOL face critical challenges:
 A complete **AI-powered modernization pipeline** that:
 
 1. ✅ Fetches legacy COBOL from AWS S3
-2. ✅ Modernizes to idiomatic Rust using **Gemini 2.5 Pro**
+2. ✅ Modernizes to idiomatic Rust using **Claude claude-opus-4-6**
 3. ✅ **Validates correctness** by comparing outputs
 4. ✅ Saves verified code back to S3 with secure access
 5. ✅ **Secures all agent-to-MCP communication** via Agent Gateway (JWT + RBAC)
@@ -100,12 +100,12 @@ A complete **AI-powered modernization pipeline** that:
 │  • Validates outputs match        │             │
 │  • Generates pre-signed S3 URLs   │             │
 └────────────────┬──────────────────┘             │
-                 │ API Call                        │
-                 ▼                                 │
+                 │ API Call                       │
+                 ▼                                │
 ┌───────────────────────────────────┐             │
 │   Purple Agent (AI Modernizer)    │             │
-│  • Powered by Gemini 2.5 Pro     │             │
-│  • Converts COBOL → Rust         │             │
+│  • Powered by claude-opus-4-6     │             │
+│  • Converts COBOL → Rust          │             │
 │  • Handles packed decimals        │             │
 └───────────────────────────────────┘             │
 ```
@@ -161,7 +161,7 @@ Agent                Agent Gateway              MCP Server
 ## ✨ Key Features
 
 ### 🤖 AI-Powered Modernization
-- **Gemini 2.5 Pro** for intelligent code translation
+- **claude-opus-4-6** for intelligent code translation
 - Handles complex COBOL constructs (COMP-3 packed decimals, file I/O)
 - Generates idiomatic, memory-safe Rust code
 
@@ -204,7 +204,7 @@ Result: ✅ MATCH CONFIRMED - Code saved to S3
 
 | Component | Technology | Purpose |
 |---|---|---|
-| **AI Model** | Gemini 2.5 Pro | COBOL→Rust translation |
+| **AI Model** | Claude claude-opus-4-6 (Anthropic) | COBOL→Rust translation |
 | **Agent Gateway** | Rust + Actix-web | JWT AuthN + RBAC AuthZ |
 | **Backend** | Rust + Actix-web | Green Agent orchestration |
 | **COBOL Compiler** | GnuCOBOL | Validate original code |
@@ -222,7 +222,7 @@ Result: ✅ MATCH CONFIRMED - Code saved to S3
 - **Kubernetes cluster** (Docker Desktop K8s / EKS) for Phase 2
 - **Helm 3.x** for Kubernetes deployment
 - **AWS Account** with S3 access
-- **Gemini API Key** (get from [Google AI Studio](https://aistudio.google.com/app/apikey))
+- **Claude API Key** (get from [Claude Developer Platform]( https://console.anthropic.com))
 - **Git** (for cloning the repository)
 
 ---
@@ -243,7 +243,7 @@ Create `.env` file in project root:
 AWS_ACCESS_KEY_ID=your_access_key
 AWS_SECRET_ACCESS_KEY=your_secret_key
 AWS_REGION=us-east-1
-GEMINI_API_KEY=your_gemini_api_key
+Claude_API_KEY=your_claude_api_key
 ```
 
 #### 3. Build and Run
@@ -264,7 +264,7 @@ Invoke-RestMethod -Uri http://localhost:8080/evaluate -Method POST -ContentType 
 
 #### 1. Set environment variables
 ```powershell
-$env:GEMINI_API_KEY = "your-gemini-key"
+$env:CLAUDE_API_KEY = "your-claude-key"
 $env:AWS_ACCESS_KEY_ID = "your-aws-key"
 $env:AWS_SECRET_ACCESS_KEY = "your-aws-secret"
 ```
@@ -340,7 +340,7 @@ Mainframe-Modernization/
 └───────────────┬─────────────────────────┘
                 │
 ┌───────────────▼─────────────────────────┐
-│  3. Generate Rust code (Gemini 2.5 Pro) │
+│  3. Generate Rust code (claude-opus-4-6)│
 └───────────────┬─────────────────────────┘
                 │
 ┌───────────────▼─────────────────────────┐
@@ -381,7 +381,7 @@ Mainframe-Modernization/
 
 1. **GnuCOBOL Quirks**: Implied decimal (`V`) handling → Used `FUNCTION NUMVAL`
 2. **Packed Decimal (COMP-3)**: Precision errors → Decimal literals and explicit arithmetic
-3. **Gemini Model Selection**: Wrong model name → Used `gemini-2.5-pro`
+3. **AI Model Selection**: Gemini model inconsistencies → Switched to Claude claude-opus-4-6 for reliable, consistent Rust code generation
 4. **Base64 Encoding**: Unnecessary complexity → Switched to plain text JSON
 5. **Secret Management**: Nearly committed AWS credentials → Proper `.gitignore`, rotated secrets
 6. **Rust Workspace**: `agent_gateway` not in workspace members → Added to root `Cargo.toml`
@@ -422,7 +422,7 @@ MIT License — see [LICENSE](LICENSE) file for details.
 
 ## 🙏 Acknowledgments
 
-- **Google Gemini 2.5 Pro** for AI-powered code translation
+- **Claude claude-opus-4-6** for AI-powered code translation
 - **GnuCOBOL** for open-source COBOL compilation
 - **Anthropic Claude** for development assistance
 - **AWS** for cloud infrastructure
@@ -431,4 +431,5 @@ MIT License — see [LICENSE](LICENSE) file for details.
 
 ---
 
-*Built with ❤️ — Modernizing mainframes, one line of COBOL at a time* 🚀
+*Built with ❤️ — Modernizin
+ mainframes, one line of COBOL at a time* 🚀
