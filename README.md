@@ -1,4 +1,4 @@
-# Mainframe Modernization: AI-Powered COBOL to Rust Pipeline
+# Mainframe Modernization: AI-Powered COBOL and Assembler (HLASM) to Rust Pipeline
 
 [![CI Status](https://github.com/venkatnagala/Mainframe-Modernization/actions/workflows/rust.yml/badge.svg)](https://github.com/venkatnagala/Mainframe-Modernization/actions/workflows/rust.yml)
 [![Rust](https://img.shields.io/badge/rust-%23000000.svg?style=for-the-badge&logo=rust&logoColor=white)](https://www.rust-lang.org/)
@@ -6,7 +6,7 @@
 [![AWS](https://img.shields.io/badge/AWS-%23FF9900.svg?style=for-the-badge&logo=amazon-aws&logoColor=white)](https://aws.amazon.com/)
 [![Kubernetes](https://img.shields.io/badge/kubernetes-%23326ce5.svg?style=for-the-badge&logo=kubernetes&logoColor=white)](https://kubernetes.io/)
 
-> An automated, AI-powered system that modernizes legacy mainframe COBOL applications to memory-safe Rust with automated validation, secured by a zero-trust Agent Gateway.
+> An automated, AI-powered system that modernizes legacy mainframe COBOL and Assembler (HLASM) applications to memory-safe Rust with automated validation, secured by a zero-trust Agent Gateway.
 
 ---
 
@@ -15,9 +15,20 @@
 | Competition | Phase | Status |
 |---|---|---|
 | **AgentAheads Hackathon 2026** | Phase 1: AI-powered COBOL→Rust pipeline with Docker Compose | ✅ Completed |
-| **SOLO AI Competition 2026** | Phase 2: Agent Gateway (JWT AuthN/AuthZ) + Kubernetes | 🔄 In Progress |
+| **SOLO AI Competition 2026** | Phase 2: Agent Gateway (JWT AuthN/AuthZ) + Kubernetes | ✅ Submitted |
 
 ---
+
+## 🎯 SOLO AI Competition 2026 Submission
+
+**Category:** Secure & Govern MCP
+
+### 📺 Demo Videos
+- **Quick Demo (2 min):** https://www.youtube.com/watch?v=a7Yfz614d5Y
+- **Detailed Walkthrough (9 min):** https://www.youtube.com/watch?v=5s6MMIfxNf0
+
+### 📝 Blog Post
+https://dev.to/venkateshwar_raonagala_4/how-i-added-zero-trust-guardrails-to-4-mcp-servers-using-agentgateway-and-modernized-legacy-cobol-1fl8
 
 ## 🎯 Problem Statement
 
