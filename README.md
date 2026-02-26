@@ -240,70 +240,42 @@ Result: ✅ MATCH CONFIRMED - Code saved to S3
 
 ## 🚀 Quick Start
 
-### Option A: Local Development (Docker Compose)
+### Local Development (Docker Compose)
 
 #### 1. Clone Repository
 ```bash
 git clone https://github.com/venkatnagala/Mainframe-Modernization.git
-cd Mainframe-Modernization
 ```
 
 #### 2. Configure Environment
-Create `.env` file in project root:
-```bash
-AWS_ACCESS_KEY_ID=your_access_key
-AWS_SECRET_ACCESS_KEY=your_secret_key
-AWS_REGION=us-east-1
-Claude_API_KEY=your_claude_api_key
-```
+2. Create .env file
+   cp .env.example .env
+   
+3. Add your credentials to .env
+   - ANTHROPIC_API_KEY: Get from console.anthropic.com ($5 minimum)
+   - AWS credentials: Get from console.aws.amazon.com
 
-#### 3. Build and Run
-```powershell
-docker-compose build
-docker-compose up
-```
+4. Run the pipeline
+   docker-compose up --build
 
 #### 4. Test the Pipeline
 ```powershell
-$json = '{"task_id":"TEST_01","source_location":{"bucket":"mainframe-refactor-lab-venkatnagala","key":"programs/interest_calc.cbl"}}'
-Invoke-RestMethod -Uri http://localhost:8080/evaluate -Method POST -ContentType "application/json" -Body $json
-```
-
----
-
-### Option B: Kubernetes Deployment (Phase 2)
-
-#### 1. Set environment variables
-```powershell
-$env:CLAUDE_API_KEY = "your-claude-key"
-$env:AWS_ACCESS_KEY_ID = "your-aws-key"
-$env:AWS_SECRET_ACCESS_KEY = "your-aws-secret"
-```
-
-#### 2. Deploy with one command
-```powershell
-.\deploy.ps1 -Environment local
-```
-
-#### 3. Test Agent Gateway
-```powershell
-# Get JWT token
-$token = (Invoke-RestMethod -Uri http://localhost:8090/auth/token -Method POST `
-  -ContentType "application/json" `
-  -Body '{"agent_id":"green_agent","api_key":"your-key","requested_role":"orchestrator"}'
-).access_token
-
 # Health check
 Invoke-RestMethod -Uri http://localhost:8090/health -Method GET
 
-# Invoke MCP via gateway
-Invoke-RestMethod -Uri http://localhost:8090/mcp/invoke -Method POST `
-  -Headers @{Authorization="Bearer $token"} `
-  -ContentType "application/json" `
-  -Body '{"target_mcp":"s3_mcp","operation":"fetch_source","payload":{"bucket":"mainframe-refactor-lab-venkatnagala","key":"programs/interest_calc.cbl"}}'
-```
+# Run pipeline
+$json = '{"task_id":"DEMO_01","source_location":{"bucket":"mainframe-refactor-lab-venkatnagala","key":"programs/interest_calc.cbl"}}'
+$result = Invoke-RestMethod -Uri http://localhost:8080/evaluate -Method POST -ContentType "application/json" -Body $json
+$result
 
----
+# Open Rust code in browser
+Start-Process $result.rust_code_url
+
+# RBAC security test
+$purpleToken = (Invoke-RestMethod -Uri http://localhost:8090/auth/token -Method POST -ContentType "application/json" -Body '{"agent_id":"purple_agent","api_key":"purple-agent-dev-key-change-in-prod","requested_role":"modernizer"}').access_token
+Invoke-RestMethod -Uri http://localhost:8090/mcp/invoke -Method POST -Headers @{Authorization="Bearer $purpleToken"} -ContentType "application/json" -Body '{"target_mcp":"s3_mcp","operation":"fetch_source","payload":{}}'
+
+```
 
 ## 📁 Project Structure
 
@@ -442,5 +414,4 @@ MIT License — see [LICENSE](LICENSE) file for details.
 
 ---
 
-*Built with ❤️ — Modernizin
- mainframes, one line of COBOL at a time* 🚀
+*Built with ❤️ — Modernizing mainframes, one line of COBOL at a time* 🚀
