@@ -198,7 +198,7 @@ To run this pipeline you will need:
 |---|---|---|
 | **Docker Desktop** | Free | https://www.docker.com/products/docker-desktop |
 | **AWS Account + S3** | Free tier available | https://console.aws.amazon.com |
-| **Anthropic API Key** | $5 minimum credit | https://console.anthropic.com |
+| **Claude API Key** | $5 minimum credit | https://console.anthropic.com |
 | **Git** | Free | https://git-scm.com |
 
 > **Note:** The Anthropic API key requires a minimum $5 credit to use Claude claude-opus-4-6.
@@ -220,8 +220,8 @@ cd Mainframe-Modernization
 cp .env.example .env
 
 # Edit .env and add your credentials:
-# ANTHROPIC_API_KEY=your_key_here         (from console.anthropic.com - $5 minimum)
-# AWS_ACCESS_KEY_ID=your_key_here         (from console.aws.amazon.com)
+# CLAUDE_API_KEY=your_key_here           (from console.anthropic.com - $5 minimum)
+# AWS_ACCESS_KEY_ID=your_key_here        (from console.aws.amazon.com)
 # AWS_SECRET_ACCESS_KEY=your_secret_here
 # AWS_REGION=us-east-1
 # S3_BUCKET_NAME=your_bucket_name_here
@@ -245,6 +245,17 @@ This automatically:
 - ✅ Triggers the modernization pipeline
 - ✅ Shows live logs (Press Ctrl+C to exit)
 
+Expected output:
+```
+🚀 Initializing Mainframe Modernization Pipeline...
+📦 Building and Starting Containers...
+⏳ Waiting for Green Agent to wake up...
+✅ Agents are Online!
+📡 Injecting Modernization Task...
+Task accepted!
+@{task_id=MODERN-DEMO-2026; status=SUCCESS - Outputs match! ✅; match_confirmed=True}
+📋 Attaching to Logs (Press Ctrl+C to exit)...
+```
 
 ### Step 5 — Verify Zero-Trust Security
 ```powershell
@@ -261,8 +272,23 @@ Invoke-RestMethod -Uri http://localhost:8090/mcp/invoke -Method POST `
   -Headers @{Authorization="Bearer $purpleToken"} `
   -ContentType "application/json" `
   -Body '{"target_mcp":"s3_mcp","operation":"fetch_source","payload":{}}'
-# Expected: "Role Modernizer is not authorized to call fetch_source on s3_mcp"
 ```
+
+Expected security response:
+```json
+{
+  "authorized": false,
+  "error": "Role Modernizer is not authorized to call fetch_source on s3_mcp",
+  "audit_trail": {
+    "agent_id": "purple_agent",
+    "authorized": false,
+    "request_id": "cf1d3191-4053-4b8e-b8a8-d4035023f92a"
+  }
+}
+```
+
+---
+
 ## 📁 Project Structure
 
 ```
@@ -358,8 +384,7 @@ Mainframe-Modernization/
 ### Key Insights
 - 📚 **100+ S3 uploads** to debug COBOL compilation issues
 - ⏰ **48+ hours** debugging model configurations
-- 🎯 **Rust compiler messages** are detailed and beginner-friendly — while experienced Assembler programmers read dumps with 
-ease, Rust's compiler guides developers who are new to low-level systems programming.
+- 🎯 **Rust compiler messages** are invaluable — far clearer than Assembler's cryptic codes
 - 🔒 **Security first**: Agent Gateway enforces zero-trust between all agents
 - 🤖 **Claude consistency**: Claude claude-opus-4-6 produced working Rust where Gemini 2.5 Pro failed repeatedly
 
