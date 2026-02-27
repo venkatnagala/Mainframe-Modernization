@@ -22,6 +22,12 @@ services:
     networks:
       - modernization-network
     restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/8090' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
   # 🪣 S3 MCP - AWS S3 operations
   s3-mcp:
@@ -43,8 +49,14 @@ services:
     networks:
       - modernization-network
     restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/8081' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
-  # 🧠 Gemini MCP - AI translation via Gemini 2.5 Pro
+  # 🧠 Gemini MCP - AI translation via Claude claude-opus-4-6
   gemini-mcp:
     build:
       context: ./gemini_mcp
@@ -53,7 +65,7 @@ services:
     ports:
       - "8087:8082"
     env_file: .env
-    environment:      
+    environment:
       - CLAUDE_API_KEY=${CLAUDE_API_KEY}
       - BIND_ADDR=0.0.0.0:8082
       - RUST_LOG=info
@@ -62,6 +74,12 @@ services:
     networks:
       - modernization-network
     restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/8082' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
   # ⚙️ COBOL MCP - GnuCOBOL compilation and execution
   cobol-mcp:
@@ -79,6 +97,12 @@ services:
     networks:
       - modernization-network
     restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/8083' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
   # 🦀 Rust MCP - Cargo compilation and execution
   rust-mcp:
@@ -96,6 +120,12 @@ services:
     networks:
       - modernization-network
     restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/8084' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
   # 🟣 Purple Agent - AI Modernizer
   purple-agent:
@@ -112,6 +142,12 @@ services:
     networks:
       - modernization-network
     restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/8081' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
   # 🟢 Green Agent - Orchestrator
   green-agent:
@@ -125,7 +161,7 @@ services:
     environment:
       - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-      - AWS_REGION=us-east-1            
+      - AWS_REGION=us-east-1
       - PURPLE_AGENT_URL=http://purple-agent:8081/solve
       - AGENT_GATEWAY_URL=http://agent-gateway:8090
       - AGENT_ID=green_agent
@@ -140,6 +176,12 @@ services:
     networks:
       - modernization-network
     restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/8080' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
 networks:
   modernization-network:
