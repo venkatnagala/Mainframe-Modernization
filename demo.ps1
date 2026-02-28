@@ -24,5 +24,10 @@ try {
     Write-Host $result
     Start-Process $result.rust_code_url
 } catch {
-    Write-Host "Failed to reach Green Agent. Is docker-compose up running?" -ForegroundColor Red
+    Write-Host "❌ Modernization pipeline failed!" -ForegroundColor Red
+    Write-Host "Error: $($_.Exception.Message)" -ForegroundColor Yellow
+    Write-Host "Details: $($_.ErrorDetails)" -ForegroundColor Yellow
+    Write-Host "`n💡 Troubleshooting:" -ForegroundColor Cyan
+    Write-Host "   - Check pods: kubectl get pods -n mainframe-modernization" -ForegroundColor White
+    Write-Host "   - Check logs: kubectl logs deployment/green-agent -n mainframe-modernization" -ForegroundColor White
 }
