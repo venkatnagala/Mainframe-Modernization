@@ -3,9 +3,10 @@
 [![CI Status](https://github.com/venkatnagala/Mainframe-Modernization/actions/workflows/rust.yml/badge.svg)](https://github.com/venkatnagala/Mainframe-Modernization/actions/workflows/rust.yml)
 [![Rust](https://img.shields.io/badge/rust-%23000000.svg?style=for-the-badge&logo=rust&logoColor=white)](https://www.rust-lang.org/)
 [![Docker](https://img.shields.io/badge/docker-%230db7ed.svg?style=for-the-badge&logo=docker&logoColor=white)](https://www.docker.com/)
+[![Kubernetes](https://img.shields.io/badge/kubernetes-%23326ce5.svg?style=for-the-badge&logo=kubernetes&logoColor=white)](https://kubernetes.io/)
 [![AWS](https://img.shields.io/badge/AWS-%23FF9900.svg?style=for-the-badge&logo=amazon-aws&logoColor=white)](https://aws.amazon.com/)
 
-> An automated, AI-powered system that modernizes legacy mainframe COBOL applications to memory-safe Rust with automated validation, secured by a zero-trust Agent Gateway.
+> An automated, AI-powered system that modernizes legacy mainframe COBOL applications to memory-safe Rust with automated validation, secured by a zero-trust Agent Gateway — deployed on Kubernetes.
 
 ---
 
@@ -14,7 +15,7 @@
 | Competition | Phase | Status |
 |---|---|---|
 | **AgentAheads Hackathon 2026** | Phase 1: AI-powered COBOL→Rust pipeline with Docker Compose | ✅ Completed |
-| **SOLO AI Competition 2026** | Phase 2: Agent Gateway (JWT AuthN/AuthZ) | ✅ Submitted |
+| **SOLO AI Competition 2026** | Phase 2: Agent Gateway (JWT AuthN/AuthZ) + Kubernetes deployment | ✅ Submitted |
 
 ---
 
@@ -51,6 +52,7 @@ A complete **AI-powered modernization pipeline** that:
 3. ✅ **Validates correctness** by comparing outputs
 4. ✅ Saves verified code back to S3 with secure access
 5. ✅ **Secures all agent-to-MCP communication** via Agent Gateway (JWT + RBAC)
+6. ✅ **Deployed on Kubernetes** with zero-trust network policies and HPA
 
 ---
 
@@ -58,7 +60,7 @@ A complete **AI-powered modernization pipeline** that:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                        Docker Compose Network                               │
+│                     Kubernetes (mainframe-modernization)                    │
 │                                                                             │
 │  ┌──────────────┐     JWT/HTTPS      ┌─────────────────────────────────┐   │
 │  │              │ ────────────────► │       Agent Gateway              │   │
@@ -70,7 +72,7 @@ A complete **AI-powered modernization pipeline** that:
 │  ┌──────────────┐      ┌─────────────────────────────────────────────┐     │
 │  │ Purple Agent │─────►│            MCP Servers                      │     │
 │  │(AI Modernizer│      │  ┌──────┐  ┌──────────┐  ┌───────┐ ┌────┐  │     │
-│  │  Port: 8085  │      │  │  S3  │  │AI Trans. │  │ COBOL │ │Rust│  │     │
+│  │  Port: 8081  │      │  │  S3  │  │AI Trans. │  │ COBOL │ │Rust│  │     │
 │  └──────────────┘      │  │:8081 │  │  :8082   │  │ :8083 │ │:84 │  │     │
 │                        └─────────────────────────────────────────────┘     │
 │   NetworkPolicy: Default DENY ALL — whitelist only                          │
@@ -151,6 +153,15 @@ Agent                Agent Gateway              MCP Server
 - **Least-privilege IAM** policies (read-only source, write-only outputs)
 - **Pre-signed URLs** for time-limited, secure file access (1-hour expiry)
 - **No secrets in code** — environment variables only
+- **JWT auto-refresh**: Green Agent automatically re-authenticates on token expiry
+
+### ☸️ Kubernetes Deployment
+- **7 services** deployed in `mainframe-modernization` namespace
+- **HorizontalPodAutoscaler** on Purple Agent (1-5 replicas, CPU/memory based)
+- **Zero-trust NetworkPolicy** — default DENY ALL between pods
+- **Health endpoints** on all services for liveness/readiness probes
+- **GitHub Actions CI/CD** — automatic rebuild and push to Docker Hub on every commit
+- Single command deployment via `.\deploy.ps1`
 
 ### 🚀 Why Rust (not Java)?
 - **Memory safe** — no garbage collector, no null pointer exceptions
@@ -178,14 +189,14 @@ Result: ✅ SUCCESS - Outputs match! Code saved to S3
 | Component | Technology | Purpose |
 |---|---|---|
 | **AI Model** | Claude claude-opus-4-6 (Anthropic) | COBOL→Rust translation |
-| **AI Translation MCP** | ai_mcp (Rust + Actix-web) | Calls Claude claude-opus-4-6 internally — name retained from Phase 1 |
-| **AI Translation MCP** | ai_mcp (Rust + Actix-web) | Calls Claude claude-opus-4-6 internally — name retained from Phase 1 |
+| **AI Translation MCP** | ai_mcp (Rust + Actix-web) | Calls Claude claude-opus-4-6 internally |
 | **Agent Gateway** | Rust + Actix-web | JWT AuthN + RBAC AuthZ |
 | **Backend** | Rust + Actix-web | Green Agent orchestration |
 | **COBOL Compiler** | GnuCOBOL (free, open source) | Validate original code |
 | **Storage** | AWS S3 | Source & output storage |
 | **Security** | JWT + AWS IAM + Pre-signed URLs | Access control |
-| **Deployment** | Docker + Docker Compose | Local development |
+| **Deployment** | Docker + Kubernetes (Docker Desktop) | Container orchestration |
+| **CI/CD** | GitHub Actions | Auto build + push to Docker Hub |
 | **Languages** | Rust, COBOL, PowerShell | Implementation |
 
 ---
@@ -196,12 +207,13 @@ To run this pipeline you will need:
 
 | Requirement | Cost | How to Get |
 |---|---|---|
-| **Docker Desktop** | Free | https://www.docker.com/products/docker-desktop |
+| **Docker Desktop** (with Kubernetes enabled) | Free | https://www.docker.com/products/docker-desktop |
 | **AWS Account + S3** | Free tier available | https://console.aws.amazon.com |
 | **Claude API Key** | $5 minimum credit | https://console.anthropic.com |
 | **Git** | Free | https://git-scm.com |
 
-> **Note:** The Anthropic API key requires a minimum $5 credit to use Claude claude-opus-4-6.
+> **Note:** Enable Kubernetes in Docker Desktop: Settings → Kubernetes → Enable Kubernetes → Apply & Restart.
+> The Anthropic API key requires a minimum $5 credit to use Claude claude-opus-4-6.
 > AWS Free Tier is sufficient for S3 storage used by this pipeline.
 
 ---
@@ -225,6 +237,8 @@ cp .env.example .env
 # AWS_SECRET_ACCESS_KEY=your_secret_here
 # AWS_REGION=us-east-1
 # S3_BUCKET_NAME=your_bucket_name_here
+# JWT_SECRET=your-minimum-32-char-secret-here
+# AGENT_API_KEY=your-agent-api-key-here
 ```
 
 ### Step 3 — Upload Sample COBOL to S3
@@ -236,32 +250,46 @@ aws s3 cp data/loan_data.json s3://YOUR_BUCKET/data/loan_data.json
 
 ### Step 4 — Run Everything (One Command!)
 ```powershell
-.\run_all.ps1
+.\deploy.ps1
 ```
 
 This automatically:
-- ✅ Builds and starts all 7 containers
-- ✅ Waits until Green Agent is healthy
-- ✅ Triggers the modernization pipeline
-- ✅ Shows live logs (Press Ctrl+C to exit)
+- ✅ Verifies kubectl and cluster connection
+- ✅ Loads environment variables from `.env`
+- ✅ Creates Kubernetes namespace and RBAC
+- ✅ Creates all Kubernetes secrets from `.env`
+- ✅ Deploys Agent Gateway and waits for readiness
+- ✅ Deploys all 4 MCP servers
+- ✅ Deploys Green Agent and Purple Agent
+- ✅ Applies zero-trust network policies
+- ✅ Waits for all 7 pods to be ready
+- ✅ Port-forwards Green Agent and runs demo automatically
 
 Expected output:
 ```
-🚀 Initializing Mainframe Modernization Pipeline...
-📦 Building and Starting Containers...
-⏳ Waiting for Green Agent to wake up...
-✅ Agents are Online!
-📡 Injecting Modernization Task...
+🚀 Mainframe Modernization Pipeline - Kubernetes Deployment
+============================================================
+...
+🎉 DEPLOYMENT COMPLETE!
+============================================================
+
+📊 Pod Status:
+NAME                          READY   STATUS    RESTARTS
+agent-gateway-xxx             1/1     Running   0
+ai-mcp-xxx                    1/1     Running   0
+cobol-mcp-xxx                 1/1     Running   0
+green-agent-xxx               1/1     Running   0
+purple-agent-xxx              1/1     Running   0
+rust-mcp-xxx                  1/1     Running   0
+s3-mcp-xxx                    1/1     Running   0
+
+Sending Modernization Task to Green Agent...
 Task accepted!
 @{task_id=MODERN-DEMO-2026; status=SUCCESS - Outputs match! ✅; match_confirmed=True}
-📋 Attaching to Logs (Press Ctrl+C to exit)...
 ```
 
 ### Step 5 — Verify Zero-Trust Security
 ```powershell
-# Health check — all 7 services registered
-Invoke-RestMethod -Uri http://localhost:8090/health -Method GET
-
 # Test RBAC — Purple Agent blocked from S3
 $purpleToken = (Invoke-RestMethod -Uri http://localhost:8090/auth/token `
   -Method POST -ContentType "application/json" `
@@ -287,6 +315,15 @@ Expected security response:
 }
 ```
 
+### Step 6 — Run Demo Again Manually (Optional)
+```powershell
+# Port-forward Green Agent
+kubectl port-forward svc/green-agent 8080:8080 -n mainframe-modernization
+
+# In a new terminal:
+.\demo.ps1
+```
+
 ---
 
 ## 📁 Project Structure
@@ -298,7 +335,7 @@ Mainframe-Modernization/
 │   ├── Cargo.toml
 │   └── Dockerfile
 ├── green_agent/              # Orchestration service
-│   ├── src/main.rs          # Routes calls via Agent Gateway
+│   ├── src/main.rs          # Routes calls via Agent Gateway + JWT auto-refresh
 │   ├── Dockerfile
 │   └── Cargo.toml
 ├── purple_agent/             # AI modernization service
@@ -309,12 +346,20 @@ Mainframe-Modernization/
 ├── ai_mcp/                  # AI translation MCP server (calls Claude claude-opus-4-6)
 ├── cobol_mcp/               # COBOL compilation MCP server
 ├── rust_mcp/                # Rust compilation MCP server
+├── k8s/base/                # Kubernetes manifests
+│   ├── 00-namespace-rbac.yaml
+│   ├── 01-secrets-config.yaml
+│   ├── 02-agent-gateway.yaml
+│   ├── 03-agents.yaml
+│   ├── 04-network-policy.yaml
+│   └── 05-mcp-servers.yaml
 ├── legacy_source/           # Sample COBOL programs
 │   └── interest_calc.cbl
 ├── data/                    # Test data
 │   └── loan_data.json
 ├── .env.example             # Environment template — start here!
-├── docker-compose.yml       # Run the pipeline
+├── deploy.ps1               # One-command Kubernetes deployment + demo
+├── demo.ps1                 # Run modernization pipeline
 └── README.md
 ```
 
@@ -363,6 +408,7 @@ Mainframe-Modernization/
 | **Validation** | ⚠️ Manual testing | ✅ Automated output comparison |
 | **Target Language** | Java | **Memory-safe Rust** |
 | **Agent Security** | ❌ No agent AuthZ | ✅ JWT + RBAC Agent Gateway |
+| **Orchestration** | Managed services | ✅ Kubernetes + HPA |
 | **Cost** | Vendor fees ($1M+) | Open-source tools |
 | **Vendor Lock-in** | High | None |
 
@@ -380,6 +426,9 @@ Mainframe-Modernization/
 6. **Rust Workspace**: `agent_gateway` not in workspace members → Added to root `Cargo.toml`
 7. **MCP Naming**: Renamed from `gemini_mcp` to `ai_mcp` — reflects actual function (AI translation) not the model name
 8. **RwLock Clone**: `GatewayClient` derived `Clone` on non-cloneable field → Removed derive
+9. **GLIBC Mismatch on Kubernetes**: `cobol-mcp` and `s3-mcp` crashed on `debian:bookworm-slim` — runtime stage changed to `FROM rust:latest`
+10. **JWT Token Expiry**: Green Agent cached token at startup, expired after ~3 hours → Added auto-refresh on 401 in `invoke_mcp()`
+11. **Missing Health Endpoint**: Purple Agent lacked `/health` route — Kubernetes liveness probe killed it every 30 seconds (34 restarts!) → Added `/health` GET endpoint
 
 ### Key Insights
 - 📚 **100+ S3 uploads** to debug COBOL compilation issues
@@ -387,6 +436,7 @@ Mainframe-Modernization/
 - 🎯 **Rust compiler messages** are invaluable — far clearer than Assembler's cryptic codes
 - 🔒 **Security first**: Agent Gateway enforces zero-trust between all agents
 - 🤖 **Claude consistency**: Claude claude-opus-4-6 produced working Rust where Gemini 2.5 Pro failed repeatedly
+- ☸️ **Kubernetes hardening**: Real-world issues (GLIBC, JWT expiry, missing health endpoints) only surface under production-like conditions
 
 ---
 
@@ -400,7 +450,7 @@ Mainframe-Modernization/
 - COBOL-DB2 embedded SQL support
 - VSAM→DynamoDB/RDS migration
 - Migration reports & analytics
-- Kubernetes deployment (production hardening)
+- Kubernetes production hardening (multi-node cluster, Ingress controller, TLS termination, persistent volumes)
 
 ---
 
