@@ -26,6 +26,7 @@
 ### 📺 Demo Videos
 - **Quick Demo (2 min):** https://www.youtube.com/watch?v=a7Yfz614d5Y
 - **Detailed Walkthrough (9 min):** https://www.youtube.com/watch?v=5s6MMIfxNf0
+- **Kubernetes Deployment Demo (3 min):** https://www.youtube.com/watch?v=05I-q2Ugw5Q
 
 ### 📝 Blog Post
 https://dev.to/venkateshwar_raonagala_4/how-i-added-zero-trust-guardrails-to-4-mcp-servers-using-agentgateway-and-modernized-legacy-cobol-1fl8
