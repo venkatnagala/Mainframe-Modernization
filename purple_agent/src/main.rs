@@ -1,4 +1,4 @@
-use axum::{routing::post, Json, Router};
+use axum::{routing::{post, get}, Json, Router};
 use serde::{Deserialize, Serialize};
 use std::env;
 use reqwest::Client;
@@ -39,9 +39,16 @@ struct ClaudeContent {
     text: Option<String>,
 }
 
+// ── Health endpoint for Kubernetes liveness/readiness probes ──────────────────
+async fn health() -> Json<serde_json::Value> {
+    Json(serde_json::json!({"status": "healthy", "agent": "purple_agent"}))
+}
+
 #[tokio::main]
 async fn main() {
-    let app = Router::new().route("/solve", post(handle_modernization));
+    let app = Router::new()
+        .route("/solve", post(handle_modernization))
+        .route("/health", get(health));  // ← ADDED
 
     let addr = SocketAddr::from(([0, 0, 0, 0], 8081));
     println!("🟣 Purple Agent (AI Modernizer) Online | Listening on {}", addr);
@@ -104,7 +111,6 @@ async fn handle_modernization(Json(payload): Json<ModernizeRequest>) -> Json<Mod
         }
     }
 
-    // Clean potential markdown artifacts
     rust_output = rust_output
         .replace("```rust", "")
         .replace("```", "")
