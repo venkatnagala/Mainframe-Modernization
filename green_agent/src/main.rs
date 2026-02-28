@@ -85,6 +85,44 @@ impl GatewayClient {
             .map_err(|e| format!("Gateway request failed: {}", e))?;
 
         let status = response.status();
+
+        // ── AUTO REFRESH on 401 ExpiredSignature ──────────────────────────
+    if status.as_u16() == 401 {
+        info!("🔄 JWT expired — refreshing token...");
+        let api_key = std::env::var("AGENT_API_KEY")
+            .map_err(|_| "AGENT_API_KEY not set")?;
+        self.authenticate(&api_key).await?;
+
+        // Retry with new token
+        let new_token = {
+            let t = self.access_token.read().unwrap();
+            t.clone().ok_or("Token missing after refresh")?
+        };
+
+        let retry = self.http_client
+            .post(format!("{}/mcp/invoke", self.gateway_url))
+            .header("Authorization", format!("Bearer {}", new_token))
+            .json(&serde_json::json!({
+                "target_mcp": target_mcp,
+                "operation": operation,
+                "payload": payload
+            }))
+            .send()
+            .await
+            .map_err(|e| format!("Retry request failed: {}", e))?;
+
+        let retry_status = retry.status();
+        let retry_body: serde_json::Value = retry.json().await
+            .map_err(|e| format!("Invalid retry response: {}", e))?;
+
+        return if retry_status.is_success() && retry_body["success"].as_bool().unwrap_or(false) {
+            Ok(retry_body["result"].clone())
+        } else {
+            Err(format!("Gateway error after refresh {}: {:?}", retry_status, retry_body))
+        };
+    }
+    // ─────────────────────────────────────────────────────────────────
+
         let body: serde_json::Value = response.json().await
             .map_err(|e| format!("Invalid gateway response: {}", e))?;
 
