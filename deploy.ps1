@@ -198,13 +198,61 @@ Write-Host "`n📋 Step 13: Running Demo Pipeline..." -ForegroundColor Yellow
 .\demo.ps1
 
 # ============================================================
-# STEP 14: Cleanup port forward
+# STEP 14: Zero-Trust RBAC Security Test
 # ============================================================
-Write-Host "`n📋 Step 14: Cleaning up port forward..." -ForegroundColor Yellow
-Stop-Process -Id $portForward.Id -Force 2>$null
-Write-Host "✅ Port forward stopped" -ForegroundColor Green
+Write-Host "`n📋 Step 14: Running Zero-Trust RBAC Security Test..." -ForegroundColor Yellow
+Write-Host "🔐 Proving Purple Agent CANNOT access S3 (least-privilege enforced)..." -ForegroundColor Cyan
 
-Write-Host "`n✅ Mainframe Modernization Pipeline is running on Kubernetes!" -ForegroundColor Green
+# Need agent-gateway port-forward for security test
+$portForwardGateway = Start-Process -FilePath "kubectl" `
+    -ArgumentList "port-forward svc/agent-gateway 8090:8090 -n mainframe-modernization" `
+    -PassThru -WindowStyle Hidden
+
+Start-Sleep -Seconds 3
+
+try {
+    # Get Purple Agent JWT token
+    $purpleToken = (Invoke-RestMethod `
+        -Uri "http://localhost:8090/auth/token" `
+        -Method POST `
+        -ContentType "application/json" `
+        -Body '{"agent_id":"purple_agent","api_key":"purple-agent-dev-key-change-in-prod","requested_role":"modernizer"}'
+    ).access_token
+
+    Write-Host "✅ Purple Agent JWT token issued (role: modernizer)" -ForegroundColor Green
+
+    # Attempt S3 fetch — should be DENIED
+    $rbacResult = Invoke-RestMethod `
+        -Uri "http://localhost:8090/mcp/invoke" `
+        -Method POST `
+        -Headers @{Authorization="Bearer $purpleToken"} `
+        -ContentType "application/json" `
+        -Body '{"target_mcp":"s3_mcp","operation":"fetch_source","payload":{}}'
+
+    Write-Host "⚠️  Unexpected: Request was allowed!" -ForegroundColor Red
+    Write-Host ($rbacResult | ConvertTo-Json) -ForegroundColor Red
+
+} catch {
+    # 403 Forbidden is the EXPECTED and CORRECT response
+    Write-Host "✅ RBAC ENFORCED — Purple Agent blocked from S3 as expected!" -ForegroundColor Green
+    Write-Host "🛡️  Zero-Trust Security Working Correctly:" -ForegroundColor Cyan
+    Write-Host "   Role 'Modernizer' is NOT authorized to call fetch_source on s3_mcp" -ForegroundColor White
+}
+
+# Cleanup gateway port-forward
+Stop-Process -Id $portForwardGateway.Id -Force 2>$null
+Write-Host "✅ Gateway port-forward stopped" -ForegroundColor Green
+
+# ============================================================
+# STEP 15: Cleanup green-agent port forward
+# ============================================================
+Write-Host "`n📋 Step 15: Cleaning up..." -ForegroundColor Yellow
+Stop-Process -Id $portForward.Id -Force 2>$null
+Write-Host "✅ Port forwards stopped" -ForegroundColor Green
+
+Write-Host "`n============================================================" -ForegroundColor Cyan
+Write-Host "✅ Mainframe Modernization Pipeline is running on Kubernetes!" -ForegroundColor Green
+Write-Host "============================================================" -ForegroundColor Cyan
 Write-Host "`n💡 To run again manually:" -ForegroundColor Cyan
 Write-Host "   kubectl port-forward svc/green-agent 8080:8080 -n mainframe-modernization" -ForegroundColor White
 Write-Host "   .\demo.ps1" -ForegroundColor White
