@@ -15,7 +15,7 @@ COPY src ./src
 RUN touch src/main.rs && cargo build --release
 
 # Runtime stage - includes GnuCOBOL
-FROM debian:bookworm-slim
+FROM rust:latest
 
 RUN apt-get update && apt-get install -y \
     ca-certificates \
