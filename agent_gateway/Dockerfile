@@ -1,5 +1,5 @@
 # Multi-stage build for minimal image size
-FROM rust:1.91-slim-bookworm AS builder
+FROM rust:latest AS builder
 
 WORKDIR /app
 
@@ -37,6 +37,6 @@ USER gateway
 EXPOSE 8090
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD wget -qO- http://localhost:8090/health || exit 1
+    CMD bash -c 'echo > /dev/tcp/localhost/8090' || exit 1
 
 CMD ["./agent-gateway"]

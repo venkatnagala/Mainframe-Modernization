@@ -1,4 +1,4 @@
-FROM rust:1.91-slim-bookworm AS builder
+FROM rust:latest AS builder
 
 WORKDIR /app
 
@@ -33,6 +33,6 @@ USER mcpuser
 EXPOSE 8081
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD wget -qO- http://localhost:8081/health || exit 1
+    CMD bash -c 'echo > /dev/tcp/localhost/8081' || exit 1
 
 CMD ["./s3-mcp"]

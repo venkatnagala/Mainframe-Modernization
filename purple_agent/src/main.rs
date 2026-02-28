@@ -1,4 +1,4 @@
-use axum::{routing::post, Json, Router}; // Fixed from ax_utils to axum
+use axum::{routing::post, Json, Router};
 use serde::{Deserialize, Serialize};
 use std::env;
 use reqwest::Client;
@@ -14,13 +14,37 @@ struct ModernizeResponse {
     modernized_rust: String,
 }
 
+#[derive(Serialize)]
+struct ClaudeRequest {
+    model: String,
+    max_tokens: u32,
+    messages: Vec<ClaudeMessage>,
+}
+
+#[derive(Serialize)]
+struct ClaudeMessage {
+    role: String,
+    content: String,
+}
+
+#[derive(Deserialize)]
+struct ClaudeResponse {
+    content: Vec<ClaudeContent>,
+}
+
+#[derive(Deserialize)]
+struct ClaudeContent {
+    #[serde(rename = "type")]
+    content_type: String,
+    text: Option<String>,
+}
+
 #[tokio::main]
 async fn main() {
     let app = Router::new().route("/solve", post(handle_modernization));
 
-    // Fix: Explicitly define the address to solve type inference errors
     let addr = SocketAddr::from(([0, 0, 0, 0], 8081));
-    println!("🧠 Purple Agent (AI Modernizer) Online | Listening on {}", addr);
+    println!("🟣 Purple Agent (AI Modernizer) Online | Listening on {}", addr);
 
     axum::Server::bind(&addr)
         .serve(app.into_make_service())
@@ -29,9 +53,9 @@ async fn main() {
 }
 
 async fn handle_modernization(Json(payload): Json<ModernizeRequest>) -> Json<ModernizeResponse> {
-    println!("📖 Received COBOL for refactoring...");
+    println!("📖 Received COBOL for modernization...");
 
-    let api_key = env::var("LLM_API_KEY").expect("LLM_API_KEY must be set");
+    let api_key = env::var("CLAUDE_API_KEY").expect("CLAUDE_API_KEY must be set");
     let client = Client::new();
 
     let system_instructions = "
@@ -45,35 +69,49 @@ async fn handle_modernization(Json(payload): Json<ModernizeRequest>) -> Json<Mod
         5. Include necessary imports like 'use std::io;'.
     ";
 
-    let gemini_url = format!(
-        "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={}",
-        api_key
-    );
+    let prompt = format!("{}\n\nCOBOL SOURCE:\n{}", system_instructions, payload.cobol_code);
 
-    let gemini_payload = serde_json::json!({
-        "contents": [{
-            "parts": [{
-                "text": format!("{}\n\nCOBOL SOURCE:\n{}", system_instructions, payload.cobol_code)
-            }]
-        }]
-    });
+    let claude_request = ClaudeRequest {
+        model: "claude-opus-4-6".to_string(),
+        max_tokens: 32768,
+        messages: vec![ClaudeMessage {
+            role: "user".to_string(),
+            content: prompt,
+        }],
+    };
 
     let mut rust_output = String::from("// Error generating code");
 
-    let res = client.post(gemini_url)
-        .json(&gemini_payload)
+    let res = client
+        .post("https://api.anthropic.com/v1/messages")
+        .header("x-api-key", &api_key)
+        .header("anthropic-version", "2023-06-01")
+        .header("content-type", "application/json")
+        .json(&claude_request)
         .send()
         .await;
 
     if let Ok(response) = res {
-        let json: serde_json::Value = response.json().await.unwrap_or_default();
-        if let Some(text) = json["candidates"][0]["content"]["parts"][0]["text"].as_str() {
-            rust_output = text.trim().to_string();
+        if let Ok(claude_response) = response.json::<ClaudeResponse>().await {
+            if let Some(content) = claude_response.content
+                .into_iter()
+                .find(|c| c.content_type == "text")
+            {
+                if let Some(text) = content.text {
+                    rust_output = text.trim().to_string();
+                }
+            }
         }
     }
 
-    // Cleaning potential markdown artifacts
-    rust_output = rust_output.replace("```rust", "").replace("```", "").trim().to_string();
+    // Clean potential markdown artifacts
+    rust_output = rust_output
+        .replace("```rust", "")
+        .replace("```", "")
+        .trim()
+        .to_string();
+
+    println!("✅ Modernization complete!");
 
     Json(ModernizeResponse {
         modernized_rust: rust_output,

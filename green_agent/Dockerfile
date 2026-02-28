@@ -1,29 +1,26 @@
 # --- Stage 1: Builder ---
-FROM rust:latest as builder
+FROM rust:latest AS builder
 WORKDIR /app
 COPY . .
 RUN cargo build --release
 
 # --- Stage 2: Runtime ---
-FROM rust:latest
+FROM debian:bookworm-slim
 WORKDIR /app
 
-# Install GnuCOBOL, OpenSSL, and CA Certificates
+# Only needs CA certificates and OpenSSL for HTTPS calls
 RUN apt-get update && \
     apt-get install -y \
     ca-certificates \
     libssl-dev \
-    gnucobol \
-    libcob4-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy the compiled green_agent binary
 COPY --from=builder /app/target/release/green_agent .
-
-# Ensure the binary has execution permissions
 RUN chmod +x ./green_agent
 
-# Verify installations
-RUN rustc --version && cobc --version
+EXPOSE 8080
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD bash -c 'echo > /dev/tcp/localhost/8080' || exit 1
 
 CMD ["./green_agent"]

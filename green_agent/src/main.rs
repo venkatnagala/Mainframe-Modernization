@@ -178,9 +178,9 @@ async fn evaluate(
         Err(e) => return error_response(&req.task_id, &e),
     };
 
-    // Step 3: Translate to Rust via Agent Gateway -> Gemini MCP
+    // Step 3: Translate to Rust via Agent Gateway -> AI MCP
     let rust_code = match gw.invoke_mcp(
-        "gemini_mcp",
+        "ai_mcp",
         "translate_cobol",
         serde_json::json!({"source": cobol_source})
     ).await {

@@ -16,7 +16,7 @@ services:
       - GREEN_AGENT_API_KEY=${AGENT_API_KEY:-green-agent-dev-key-change-in-prod}
       - PURPLE_AGENT_API_KEY=purple-agent-dev-key-change-in-prod
       - S3_MCP_URL=http://s3-mcp:8081
-      - GEMINI_MCP_URL=http://gemini-mcp:8082
+      - AI_MCP_URL=http://ai-mcp:8082
       - COBOL_MCP_URL=http://cobol-mcp:8083
       - RUST_MCP_URL=http://rust-mcp:8084
     networks:
@@ -56,12 +56,12 @@ services:
       retries: 3
       start_period: 40s
 
-  # 🧠 Gemini MCP - AI translation via Claude claude-opus-4-6
-  gemini-mcp:
+  # 🧠 ai MCP - AI translation via Claude claude-opus-4-6
+  ai-mcp:
     build:
-      context: ./gemini_mcp
+      context: ./ai_mcp
       dockerfile: Dockerfile
-    container_name: gemini-mcp
+    container_name: ai-mcp
     ports:
       - "8087:8082"
     env_file: .env
@@ -138,7 +138,7 @@ services:
     env_file: .env
     depends_on:
       - agent-gateway
-      - gemini-mcp
+      - ai-mcp
     networks:
       - modernization-network
     restart: always
@@ -169,7 +169,7 @@ services:
     depends_on:
       - agent-gateway
       - s3-mcp
-      - gemini-mcp
+      - ai-mcp
       - cobol-mcp
       - rust-mcp
       - purple-agent

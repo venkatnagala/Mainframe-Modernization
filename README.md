@@ -178,8 +178,8 @@ Result: ✅ SUCCESS - Outputs match! Code saved to S3
 | Component | Technology | Purpose |
 |---|---|---|
 | **AI Model** | Claude claude-opus-4-6 (Anthropic) | COBOL→Rust translation |
-| **AI Translation MCP** | gemini_mcp (Rust + Actix-web) | Calls Claude claude-opus-4-6 internally — name retained from Phase 1 |
-| **AI Translation MCP** | gemini_mcp (Rust + Actix-web) | Calls Claude claude-opus-4-6 internally — name retained from Phase 1 |
+| **AI Translation MCP** | ai_mcp (Rust + Actix-web) | Calls Claude claude-opus-4-6 internally — name retained from Phase 1 |
+| **AI Translation MCP** | ai_mcp (Rust + Actix-web) | Calls Claude claude-opus-4-6 internally — name retained from Phase 1 |
 | **Agent Gateway** | Rust + Actix-web | JWT AuthN + RBAC AuthZ |
 | **Backend** | Rust + Actix-web | Green Agent orchestration |
 | **COBOL Compiler** | GnuCOBOL (free, open source) | Validate original code |
@@ -305,8 +305,8 @@ Mainframe-Modernization/
 │   ├── src/main.rs          # Claude claude-opus-4-6 integration
 │   ├── Cargo.toml
 │   └── Dockerfile
-├── s3_mcp/                   # S3 storage MCP server
-├── gemini_mcp/              # AI translation MCP server (calls Claude claude-opus-4-6)
+├── s3_mcp/                  # S3 storage MCP server
+├── ai_mcp/                  # AI translation MCP server (calls Claude claude-opus-4-6)
 ├── cobol_mcp/               # COBOL compilation MCP server
 ├── rust_mcp/                # Rust compilation MCP server
 ├── legacy_source/           # Sample COBOL programs
@@ -374,11 +374,11 @@ Mainframe-Modernization/
 
 1. **GnuCOBOL Quirks**: Implied decimal (`V`) handling → Used `FUNCTION NUMVAL`
 2. **Packed Decimal (COMP-3)**: Precision errors → Decimal literals and explicit arithmetic
-3. **AI Model Selection**: Gemini 2.5 Pro inconsistencies (non-existent methods, invalid variants) → Switched to **Claude claude-opus-4-6** for reliable, consistent Rust code generation
+3. **AI Model Selection**: Evaluated Gemini 2.5 Pro → Switched to **Claude claude-opus-4-6** for reliable, consistent Rust code generation
 4. **Base64 Encoding**: Unnecessary complexity → Switched to plain text JSON
 5. **Secret Management**: Nearly committed AWS credentials → Proper `.gitignore`, rotated secrets
 6. **Rust Workspace**: `agent_gateway` not in workspace members → Added to root `Cargo.toml`
-7. **MCP Naming**: `gemini_mcp` name retained from Phase 1 when Gemini was used — internally switched to Claude claude-opus-4-6 — renaming requires extensive changes across all services
+7. **MCP Naming**: Renamed from `gemini_mcp` to `ai_mcp` — reflects actual function (AI translation) not the model name
 8. **RwLock Clone**: `GatewayClient` derived `Clone` on non-cloneable field → Removed derive
 
 ### Key Insights

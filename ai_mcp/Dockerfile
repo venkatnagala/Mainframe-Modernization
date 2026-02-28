@@ -1,4 +1,4 @@
-FROM rust:1.91-slim-bookworm AS builder
+FROM rust:latest AS builder
 
 WORKDIR /app
 
@@ -22,7 +22,7 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
-COPY --from=builder /app/target/release/gemini-mcp .
+COPY --from=builder /app/target/release/ai-mcp .
 
 RUN useradd -r -s /bin/false mcpuser
 USER mcpuser
@@ -30,6 +30,6 @@ USER mcpuser
 EXPOSE 8082
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD wget -qO- http://localhost:8082/health || exit 1
-
-CMD ["./gemini-mcp"]
+    CMD bash -c 'echo > /dev/tcp/localhost/8082' || exit 1
+    
+CMD ["./ai-mcp"]

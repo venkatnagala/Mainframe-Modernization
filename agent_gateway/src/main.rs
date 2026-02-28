@@ -52,7 +52,7 @@ pub struct TokenResponse {
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash)]
 pub struct McpProxyRequest {
-    pub target_mcp: String,     // e.g., "s3_mcp", "gemini_mcp", "cobol_mcp"
+    pub target_mcp: String,     // e.g., "s3_mcp", "ai_mcp", "cobol_mcp"
     pub operation: String,      // e.g., "fetch_source", "translate", "validate"
     pub payload: serde_json::Value,
 }
@@ -120,20 +120,20 @@ impl McpRegistry {
             allowed_operations: s3_ops,
         });
 
-        // Gemini MCP: AI translation operations
-        let mut gemini_ops: HashMap<AgentRole, Vec<String>> = HashMap::new();
-        gemini_ops.insert(AgentRole::Orchestrator, vec![
+        // AI MCP: AI translation operations
+        let mut ai_ops: HashMap<AgentRole, Vec<String>> = HashMap::new();
+        ai_ops.insert(AgentRole::Orchestrator, vec![
             "translate_cobol".to_string(),
             "translate_assembler".to_string(),
             "explain_code".to_string(),
         ]);
-        gemini_ops.insert(AgentRole::Modernizer, vec![
+        ai_ops.insert(AgentRole::Modernizer, vec![
             "translate_cobol".to_string(),
             "translate_assembler".to_string(),
         ]);
-        servers.insert("gemini_mcp".to_string(), McpServer {
-            url: std::env::var("GEMINI_MCP_URL").unwrap_or("http://gemini-mcp:8082".to_string()),
-            allowed_operations: gemini_ops,
+        servers.insert("ai_mcp".to_string(), McpServer {
+            url: std::env::var("AI_MCP_URL").unwrap_or("http://ai-mcp:8082".to_string()),
+            allowed_operations: ai_ops,
         });
 
         // COBOL Compiler MCP: GnuCOBOL compilation & execution

@@ -1,11 +1,11 @@
 [package]
-name = "gemini-mcp"
+name = "ai-mcp"
 version = "1.0.0"
 edition = "2021"
-description = "Gemini MCP Server - AI-powered COBOL to Rust translation"
+description = "ai MCP Server - AI-powered COBOL to Rust translation"
 
 [[bin]]
-name = "gemini-mcp"
+name = "ai-mcp"
 path = "src/main.rs"
 
 [dependencies]
